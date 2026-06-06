@@ -21,6 +21,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -51,12 +52,15 @@ public class BuildLaunchService {
 
         String gitUrl = buildAuthGitUrl(repo);
 
+        long t0 = System.currentTimeMillis();
         if (new File(repoDir, ".git").exists()) {
+            log.info("[GIT] reuse workspace, fetch+reset branch={} dir={}", branch, repoDir.getAbsolutePath());
             runGit(repoDir, "fetch", "origin", branch);
             runGit(repoDir, "checkout", "-B", branch, "origin/" + branch);
             runGit(repoDir, "reset", "--hard", "origin/" + branch);
             runGit(repoDir, "clean", "-fd");
         } else {
+            log.info("[GIT] clone branch={} into {}", branch, repoDir.getAbsolutePath());
             File parent = repoDir.getParentFile();
             ProcessBuilder pb = new ProcessBuilder("git", "clone", "-b", branch, gitUrl, repoDir.getAbsolutePath())
                     .directory(parent)
@@ -66,6 +70,7 @@ public class BuildLaunchService {
             int code = p.waitFor();
             if (code != 0) throw new IOException("git clone failed, exit=" + code);
         }
+        log.info("[GIT] branch={} ready, cost={}s", branch, (System.currentTimeMillis() - t0) / 1000);
         return repoDir;
     }
 
@@ -133,18 +138,26 @@ public class BuildLaunchService {
             if (!a.isEmpty()) cmd.add(a);
         }
 
-        log.info("mvn build cmd: {} (cwd={})", cmd, repoRoot);
+        log.info("[BUILD] start mvn, modules={}, cwd={}, logFile={}",
+                modules.stream().map(ModuleScanner.Module::getRelativePath).collect(Collectors.toList()),
+                repoRoot.getAbsolutePath(), buildLog.getAbsolutePath());
+        log.info("[BUILD] cmd: {}", String.join(" ", cmd));
+        long t0 = System.currentTimeMillis();
         ProcessBuilder pb = new ProcessBuilder(cmd).directory(repoRoot).redirectErrorStream(true);
         Process p = pb.start();
         try (FileOutputStream fos = new FileOutputStream(buildLog)) {
             drain(p.getInputStream(), fos);
         }
         boolean ok = p.waitFor(appProperties.getTask().getBuildTimeoutSeconds(), java.util.concurrent.TimeUnit.SECONDS);
+        long cost = (System.currentTimeMillis() - t0) / 1000;
         if (!ok) {
+            log.warn("[BUILD] timeout after {}s, killing process", cost);
             p.destroyForcibly();
             return false;
         }
-        return p.exitValue() == 0;
+        int exit = p.exitValue();
+        log.info("[BUILD] finished exit={} cost={}s", exit, cost);
+        return exit == 0;
     }
 
     public LaunchResult launchModule(Repo repo, File repoRoot, ModuleScanner.Module module, int port, File logFile) throws Exception {
@@ -177,7 +190,8 @@ public class BuildLaunchService {
             cmd.add("--spring.profiles.active=" + repo.getSpringProfile());
         }
 
-        log.info("launch cmd: {}", cmd);
+        log.info("[LAUNCH] module={} port={} jar={}", module.getName(), port, jar.getAbsolutePath());
+        log.info("[LAUNCH] cmd: {}", String.join(" ", cmd));
         ProcessBuilder pb = new ProcessBuilder(cmd).directory(modDir).redirectErrorStream(true);
         Process process = pb.start();
         result.setProcess(process);
@@ -187,6 +201,8 @@ public class BuildLaunchService {
         if (!OsUtil.isWindows()) {
             result.setPgid(ProcessManager.getPgid(pid));
         }
+        log.info("[LAUNCH] module={} pid={} pgid={} logFile={}",
+                module.getName(), pid, result.getPgid(), logFile.getAbsolutePath());
 
         Pattern startedPat = Pattern.compile("Started\\s+\\S+Application\\s+in");
         Pattern portPat = Pattern.compile("Tomcat started on port\\(?s\\)?:?\\s*(\\d+)");
@@ -234,14 +250,19 @@ public class BuildLaunchService {
         }
 
         if (!started) {
+            log.warn("[LAUNCH] module={} startup TIMEOUT after {}s",
+                    module.getName(), appProperties.getTask().getStartupTimeoutSeconds());
             result.setErrorMessage("startup timeout after " + appProperties.getTask().getStartupTimeoutSeconds() + "s");
             fos.close();
             return result;
         }
+        log.info("[LAUNCH] module={} application started, actualPort={}", module.getName(), actualPort);
 
         // Probe actuator
         String actuator = StringUtils.defaultIfBlank(repo.getActuatorPath(), appProperties.getHealthCheck().getActuatorPath());
-        boolean actuatorOk = probe("http://127.0.0.1:" + actualPort + actuator);
+        String actuatorUrl = "http://127.0.0.1:" + actualPort + actuator;
+        boolean actuatorOk = probe(actuatorUrl);
+        log.info("[PROBE] module={} actuator {} -> {}", module.getName(), actuatorUrl, actuatorOk ? "OK" : "FAIL");
 
         // Probe swagger paths
         List<String> swaggerPaths = parsePaths(repo.getSwaggerPaths());
@@ -249,13 +270,16 @@ public class BuildLaunchService {
         String swaggerHit = null;
         for (String sp : swaggerPaths) {
             String url = "http://127.0.0.1:" + actualPort + sp;
-            if (probe(url)) {
+            boolean ok = probe(url);
+            log.info("[PROBE] module={} swagger {} -> {}", module.getName(), url, ok ? "OK" : "miss");
+            if (ok) {
                 swaggerHit = url;
                 break;
             }
         }
 
         if (swaggerHit == null) {
+            log.warn("[LAUNCH] module={} swagger not reachable (actuator={})", module.getName(), actuatorOk);
             result.setErrorMessage("swagger not reachable (actuator=" + actuatorOk + ")");
             return result;
         }
@@ -263,6 +287,7 @@ public class BuildLaunchService {
         result.setPort(actualPort);
         result.setSwaggerUrl(swaggerHit);
         result.setSuccess(true);
+        log.info("[LAUNCH] module={} SUCCESS port={} swagger={}", module.getName(), actualPort, swaggerHit);
         return result;
     }
 
@@ -277,16 +302,73 @@ public class BuildLaunchService {
     }
 
     private File findExecutableJar(File targetDir) {
-        if (!targetDir.exists()) return null;
-        File[] files = targetDir.listFiles((d, n) -> n.endsWith(".jar") && !n.endsWith("-sources.jar") && !n.endsWith("-javadoc.jar") && !n.endsWith(".original"));
-        if (files == null || files.length == 0) return null;
-        File chosen = null;
-        for (File f : files) {
-            if (chosen == null || f.length() > chosen.length()) {
-                chosen = f;
+        if (!targetDir.exists()) {
+            log.warn("target dir does not exist: {}", targetDir.getAbsolutePath());
+            return null;
+        }
+        List<File> candidates = new ArrayList<>();
+        collectJars(targetDir, candidates, 0, 2);
+        if (candidates.isEmpty()) {
+            log.warn("no jar candidate under {} (scanned depth=2)", targetDir.getAbsolutePath());
+            return null;
+        }
+        // Prefer Spring Boot executable jars (manifest contains Spring-Boot-Lib / JarLauncher)
+        File springBootJar = null;
+        File fallback = null;
+        for (File f : candidates) {
+            if (isSpringBootExecutableJar(f)) {
+                if (springBootJar == null || f.length() > springBootJar.length()) springBootJar = f;
+            } else if (fallback == null || f.length() > fallback.length()) {
+                fallback = f;
             }
         }
+        File chosen = springBootJar != null ? springBootJar : fallback;
+        log.info("picked jar: {} (springboot={}, size={}MB)",
+                chosen.getAbsolutePath(),
+                springBootJar != null,
+                chosen.length() / (1024 * 1024));
         return chosen;
+    }
+
+    private void collectJars(File dir, List<File> out, int depth, int maxDepth) {
+        if (depth > maxDepth) return;
+        File[] entries = dir.listFiles();
+        if (entries == null) return;
+        for (File e : entries) {
+            if (e.isFile()) {
+                String n = e.getName();
+                if (n.endsWith(".jar")
+                        && !n.endsWith("-sources.jar")
+                        && !n.endsWith("-javadoc.jar")
+                        && !n.endsWith(".original")) {
+                    out.add(e);
+                }
+            } else if (e.isDirectory()) {
+                String n = e.getName();
+                if (n.startsWith(".") || "classes".equals(n) || "test-classes".equals(n)
+                        || "generated-sources".equals(n) || "generated-test-sources".equals(n)
+                        || "maven-status".equals(n) || "maven-archiver".equals(n)
+                        || "surefire-reports".equals(n) || "site".equals(n)
+                        || "dependency".equals(n) || "lib".equals(n)) {
+                    continue;
+                }
+                collectJars(e, out, depth + 1, maxDepth);
+            }
+        }
+    }
+
+    private boolean isSpringBootExecutableJar(File jar) {
+        try (java.util.jar.JarFile jf = new java.util.jar.JarFile(jar)) {
+            java.util.jar.Manifest mf = jf.getManifest();
+            if (mf == null) return false;
+            java.util.jar.Attributes a = mf.getMainAttributes();
+            String mainClass = a.getValue("Main-Class");
+            String bootLib = a.getValue("Spring-Boot-Lib");
+            return bootLib != null
+                    || (mainClass != null && mainClass.contains("org.springframework.boot.loader"));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private boolean probe(String url) {
