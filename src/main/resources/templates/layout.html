@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<aside th:fragment="sidebar(page)" class="sidebar">
+    <h1>CICD 自检</h1>
+    <nav>
+        <a th:href="@{/repos}" th:classappend="${page == 'repos'} ? 'active' : ''">仓库管理</a>
+        <a th:href="@{/launch}" th:classappend="${page == 'launch'} ? 'active' : ''">代码启动</a>
+        <a th:href="@{/tasks}" th:classappend="${page == 'tasks'} ? 'active' : ''">任务列表</a>
+    </nav>
+    <form th:action="@{/logout}" method="post" class="logout">
+        <button type="submit">退出</button>
+    </form>
+</aside>
+</body>
+</html>

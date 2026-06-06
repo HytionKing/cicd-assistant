@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>代码启动</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body>
+<div class="app">
+    <div th:replace="~{layout :: sidebar('launch')}"></div>
+    <main class="content">
+        <header class="page-header">
+            <h2>代码启动</h2>
+        </header>
+
+        <div class="card">
+            <label class="block">选择仓库
+                <select id="sel-repo"></select>
+            </label>
+            <button id="btn-load-branches" class="btn">拉取分支</button>
+
+            <div id="branches-box" class="branches-box"></div>
+
+            <label class="block mt">手动指定模块（逗号分隔，可留空）
+                <input id="inp-modules" placeholder="例如 user-service,order-service"/>
+            </label>
+
+            <div class="actions mt">
+                <button id="btn-start" class="btn primary">开始验证</button>
+            </div>
+            <div id="msg" class="msg"></div>
+        </div>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/launch.js}"></script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cicdassistant.mapper.RepoMapper">
+
+    <resultMap id="RepoResult" type="com.cicdassistant.entity.Repo">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="gitUrl" column="git_url"/>
+        <result property="gitlabHost" column="gitlab_host"/>
+        <result property="projectPath" column="project_path"/>
+        <result property="authType" column="auth_type"/>
+        <result property="accessToken" column="access_token"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="branchPrefix" column="branch_prefix"/>
+        <result property="swaggerPaths" column="swagger_paths"/>
+        <result property="actuatorPath" column="actuator_path"/>
+        <result property="jvmArgs" column="jvm_args"/>
+        <result property="springProfile" column="spring_profile"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="RepoResult">
+        SELECT * FROM repo ORDER BY id DESC
+    </select>
+
+    <select id="findById" resultMap="RepoResult">
+        SELECT * FROM repo WHERE id = #{id}
+    </select>
+
+    <select id="findByName" resultMap="RepoResult">
+        SELECT * FROM repo WHERE name = #{name}
+    </select>
+
+    <insert id="insert" parameterType="com.cicdassistant.entity.Repo" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO repo (
+            name, git_url, gitlab_host, project_path, auth_type, access_token,
+            username, password, branch_prefix, swagger_paths, actuator_path,
+            jvm_args, spring_profile, created_at, updated_at
+        ) VALUES (
+            #{name}, #{gitUrl}, #{gitlabHost}, #{projectPath}, #{authType}, #{accessToken},
+            #{username}, #{password}, #{branchPrefix}, #{swaggerPaths}, #{actuatorPath},
+            #{jvmArgs}, #{springProfile}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.cicdassistant.entity.Repo">
+        UPDATE repo SET
+            name = #{name},
+            git_url = #{gitUrl},
+            gitlab_host = #{gitlabHost},
+            project_path = #{projectPath},
+            auth_type = #{authType},
+            <if test="accessToken != null">access_token = #{accessToken},</if>
+            username = #{username},
+            <if test="password != null">password = #{password},</if>
+            branch_prefix = #{branchPrefix},
+            swagger_paths = #{swaggerPaths},
+            actuator_path = #{actuatorPath},
+            jvm_args = #{jvmArgs},
+            spring_profile = #{springProfile},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM repo WHERE id = #{id}
+    </delete>
+</mapper>

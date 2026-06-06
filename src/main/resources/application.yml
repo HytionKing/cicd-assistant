@@ -1,0 +1,72 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: code-searcher
+  datasource:
+    url: jdbc:sqlite:./data/app.db
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
+      connection-test-query: SELECT 1
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: false
+  thymeleaf:
+    cache: false
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  file:
+    name: ./logs/app.log
+  level:
+    root: INFO
+    com.cicdassistant: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  auth:
+    users:
+      - { username: admin, password: admin123 }
+    secret-key: "CodeSearcher2026"
+  workspace:
+    root: ./workspace
+    keep-alive-minutes: 5
+    log-retention-days: 7
+  maven:
+    home: ""
+    settings-xml: ""
+    build-args: "clean package -DskipTests"
+  port-pool:
+    start: 18000
+    end: 18999
+  task:
+    max-concurrent: 2
+    startup-timeout-seconds: 300
+    build-timeout-seconds: 1200
+  health-check:
+    actuator-path: "/actuator/health"
+    swagger-paths:
+      - "/swagger-ui/index.html"
+      - "/swagger-ui.html"
+      - "/doc.html"
+    probe-interval-ms: 2000
+  gitlab:
+    default-branch-prefix: ""

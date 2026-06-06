@@ -1,0 +1,13 @@
+target/
+*.class
+*.jar
+*.log
+logs/
+data/
+workspace/
+build-logs/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+HELP.md

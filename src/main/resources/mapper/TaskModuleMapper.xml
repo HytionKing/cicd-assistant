@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cicdassistant.mapper.TaskModuleMapper">
+
+    <resultMap id="TaskModuleResult" type="com.cicdassistant.entity.TaskModule">
+        <id property="id" column="id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="branch" column="branch"/>
+        <result property="moduleName" column="module_name"/>
+        <result property="modulePath" column="module_path"/>
+        <result property="status" column="status"/>
+        <result property="port" column="port"/>
+        <result property="pid" column="pid"/>
+        <result property="pgid" column="pgid"/>
+        <result property="logFile" column="log_file"/>
+        <result property="buildLogFile" column="build_log_file"/>
+        <result property="swaggerUrl" column="swagger_url"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="keepAliveUntil" column="keep_alive_until"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="finishedAt" column="finished_at"/>
+    </resultMap>
+
+    <select id="findByTaskId" resultMap="TaskModuleResult">
+        SELECT * FROM task_module WHERE task_id = #{taskId} ORDER BY id ASC
+    </select>
+
+    <select id="findById" resultMap="TaskModuleResult">
+        SELECT * FROM task_module WHERE id = #{id}
+    </select>
+
+    <select id="findAliveCandidates" resultMap="TaskModuleResult">
+        SELECT * FROM task_module
+        WHERE status = 'SUCCESS' AND keep_alive_until IS NOT NULL
+    </select>
+
+    <insert id="insert" parameterType="com.cicdassistant.entity.TaskModule" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO task_module (
+            task_id, branch, module_name, module_path, status, port, pid, pgid,
+            log_file, build_log_file, swagger_url, error_message, keep_alive_until,
+            created_at, started_at, finished_at
+        ) VALUES (
+            #{taskId}, #{branch}, #{moduleName}, #{modulePath}, #{status}, #{port}, #{pid}, #{pgid},
+            #{logFile}, #{buildLogFile}, #{swaggerUrl}, #{errorMessage}, #{keepAliveUntil},
+            #{createdAt}, #{startedAt}, #{finishedAt}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.cicdassistant.entity.TaskModule">
+        UPDATE task_module SET
+            status = #{status},
+            port = #{port},
+            pid = #{pid},
+            pgid = #{pgid},
+            log_file = #{logFile},
+            build_log_file = #{buildLogFile},
+            swagger_url = #{swaggerUrl},
+            error_message = #{errorMessage},
+            keep_alive_until = #{keepAliveUntil},
+            started_at = #{startedAt},
+            finished_at = #{finishedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteByTaskId">
+        DELETE FROM task_module WHERE task_id = #{taskId}
+    </delete>
+</mapper>

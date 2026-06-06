@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cicdassistant.mapper.TaskMapper">
+
+    <resultMap id="TaskResult" type="com.cicdassistant.entity.Task">
+        <id property="id" column="id"/>
+        <result property="repoId" column="repo_id"/>
+        <result property="repoName" column="repo_name"/>
+        <result property="branches" column="branches"/>
+        <result property="modules" column="modules"/>
+        <result property="status" column="status"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="finishedAt" column="finished_at"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="TaskResult">
+        SELECT * FROM task ORDER BY id DESC
+    </select>
+
+    <select id="findById" resultMap="TaskResult">
+        SELECT * FROM task WHERE id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.cicdassistant.entity.Task" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO task (repo_id, repo_name, branches, modules, status, error_message, created_at, started_at, finished_at)
+        VALUES (#{repoId}, #{repoName}, #{branches}, #{modules}, #{status}, #{errorMessage}, #{createdAt}, #{startedAt}, #{finishedAt})
+    </insert>
+
+    <update id="update" parameterType="com.cicdassistant.entity.Task">
+        UPDATE task SET
+            status = #{status},
+            error_message = #{errorMessage},
+            started_at = #{startedAt},
+            finished_at = #{finishedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM task WHERE id = #{id}
+    </delete>
+</mapper>
