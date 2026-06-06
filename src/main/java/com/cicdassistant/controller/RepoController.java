@@ -58,9 +58,9 @@ public class RepoController {
             r.put("message", "repo not found");
             return r;
         }
-        boolean ok = gitLabService.testConnection(repo);
-        r.put("success", ok);
-        r.put("message", ok ? "connected" : "connection failed");
+        GitLabService.TestResult tr = gitLabService.testConnection(repo);
+        r.put("success", tr.isSuccess());
+        r.put("message", tr.getMessage());
         return r;
     }
 
