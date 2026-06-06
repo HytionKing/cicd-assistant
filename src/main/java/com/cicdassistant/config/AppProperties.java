@@ -23,7 +23,7 @@ public class AppProperties {
     @Data
     public static class Auth {
         private List<User> users = new ArrayList<>();
-        private String secretKey = "CodeSearcher2026";
+        private String secretKey = "CicdAssistant2026";
     }
 
     @Data

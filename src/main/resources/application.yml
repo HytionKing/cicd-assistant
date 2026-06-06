@@ -7,7 +7,7 @@ server:
 
 spring:
   application:
-    name: code-searcher
+    name: cicd-assistant
   datasource:
     url: jdbc:sqlite:./data/app.db
     driver-class-name: org.sqlite.JDBC
@@ -45,7 +45,7 @@ app:
   auth:
     users:
       - { username: admin, password: admin123 }
-    secret-key: "CodeSearcher2026"
+    secret-key: "CicdAssistant2026"
   workspace:
     root: ./workspace
     keep-alive-minutes: 5
