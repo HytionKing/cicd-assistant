@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.stream.Collectors;
 import java.util.List;
 
 @Slf4j
@@ -103,6 +104,8 @@ public class TaskService {
     public void runTaskAsync(Long taskId) {
         Task task = taskMapper.findById(taskId);
         if (task == null) return;
+        log.info("[TASK#{}] START repoId={} branches={} modulesFilter={}",
+                taskId, task.getRepoId(), task.getBranches(), task.getModules());
         task.setStatus("RUNNING");
         task.setStartedAt(now());
         taskMapper.update(task);
@@ -116,11 +119,15 @@ public class TaskService {
         for (String branch : branches) {
             branch = branch.trim();
             if (branch.isEmpty()) continue;
+            log.info("[TASK#{}] >>> branch={} begin", taskId, branch);
             try {
                 File repoRoot = buildLaunchService.ensureRepoClone(repo, branch);
                 List<ModuleScanner.Module> modules = buildLaunchService.scanModules(repoRoot, task.getModules());
+                log.info("[TASK#{}] branch={} scanned modules: {}", taskId, branch,
+                        modules.stream().map(m -> m.getName() + "(" + m.getRelativePath() + ")").collect(Collectors.toList()));
                 if (modules.isEmpty()) {
-                    log.warn("no springboot module found in branch={}", branch);
+                    log.warn("[TASK#{}] no springboot module found in branch={}", taskId, branch);
+                    errors.append("[").append(branch).append("] no SpringBoot module found; ");
                     continue;
                 }
 
@@ -194,9 +201,10 @@ public class TaskService {
                     taskModuleMapper.update(tm);
                 }
             } catch (Exception e) {
-                log.error("branch processing failed: {}", branch, e);
+                log.error("[TASK#{}] branch processing failed: {}", taskId, branch, e);
                 errors.append("[").append(branch).append("] ").append(e.getMessage()).append("; ");
             }
+            log.info("[TASK#{}] <<< branch={} done", taskId, branch);
         }
 
         String finalStatus;
@@ -213,6 +221,7 @@ public class TaskService {
         task.setErrorMessage(errors.length() > 0 ? errors.toString() : null);
         task.setFinishedAt(now());
         taskMapper.update(task);
+        log.info("[TASK#{}] DONE status={} success={}/{}", taskId, finalStatus, successCount, totalCount);
     }
 
     private TaskModule newModuleRow(Long taskId, String branch, ModuleScanner.Module mod, String buildLog) {
