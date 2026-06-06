@@ -12,13 +12,13 @@ import java.io.File;
 @EnableAsync
 @EnableScheduling
 @MapperScan("com.cicdassistant.mapper")
-public class CodeSearcherApplication {
+public class CicdAssistantApplication {
     public static void main(String[] args) {
         ensureDir("./data");
         ensureDir("./logs");
         ensureDir("./workspace");
         ensureDir("./build-logs");
-        SpringApplication.run(CodeSearcherApplication.class, args);
+        SpringApplication.run(CicdAssistantApplication.class, args);
     }
 
     private static void ensureDir(String path) {

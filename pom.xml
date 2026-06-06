@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.cicdassistant</groupId>
-    <artifactId>code-searcher</artifactId>
+    <artifactId>cicd-assistant</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
-    <name>code-searcher</name>
+    <name>cicd-assistant</name>
 
     <properties>
         <java.version>1.8</java.version>
@@ -92,7 +92,7 @@
     </dependencies>
 
     <build>
-        <finalName>code-searcher</finalName>
+        <finalName>cicd-assistant</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
