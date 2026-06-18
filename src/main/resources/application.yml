@@ -34,6 +34,9 @@ logging:
   level:
     root: INFO
     com.cicdassistant: DEBUG
+    # mapper 包属于 com.cicdassistant，但 MyBatis 在 DEBUG 下会把每条 SQL + 参数 + 结果集都打出来，
+    # 噪声很大，单独把 mapper 包降到 INFO；需要排查 SQL 时再临时调成 DEBUG。
+    com.cicdassistant.mapper: INFO
 
 management:
   endpoints:

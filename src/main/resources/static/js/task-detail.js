@@ -39,14 +39,29 @@
     `).join('');
   }
 
+  let logTimer = null;
+
   async function loadLog() {
     if (!currentModuleId) return;
     try {
       const r = await api.get('/api/tasks/modules/' + currentModuleId + '/log?type=' + currentType);
+      // 保持滚动位置在底部（如果用户原本在底部附近）
+      const atBottom = logContent.scrollTop + logContent.clientHeight >= logContent.scrollHeight - 20;
       logContent.textContent = r.content || '(空)';
+      if (atBottom) logContent.scrollTop = logContent.scrollHeight;
     } catch (e) {
       logContent.textContent = '加载失败: ' + e.message;
     }
+  }
+
+  function startLogAutoRefresh() {
+    stopLogAutoRefresh();
+    if (document.getElementById('chk-log-auto').checked) {
+      logTimer = setInterval(loadLog, 3000);
+    }
+  }
+  function stopLogAutoRefresh() {
+    if (logTimer) { clearInterval(logTimer); logTimer = null; }
   }
 
   tbody.addEventListener('click', async (ev) => {
@@ -64,6 +79,7 @@
       document.querySelectorAll('.log-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.type === 'run'));
       logModal.classList.remove('hidden');
       await loadLog();
+      startLogAutoRefresh();
     }
   });
 
@@ -75,7 +91,12 @@
     };
   });
 
-  document.getElementById('btn-log-close').onclick = () => logModal.classList.add('hidden');
+  document.getElementById('btn-log-refresh').onclick = loadLog;
+  document.getElementById('chk-log-auto').onchange = startLogAutoRefresh;
+  document.getElementById('btn-log-close').onclick = () => {
+    stopLogAutoRefresh();
+    logModal.classList.add('hidden');
+  };
 
   await load();
   setInterval(load, 4000);
