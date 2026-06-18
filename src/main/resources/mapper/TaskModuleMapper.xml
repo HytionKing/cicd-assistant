@@ -35,6 +35,12 @@
         WHERE status = 'SUCCESS' AND keep_alive_until IS NOT NULL
     </select>
 
+    <select id="findPlaceholder" resultMap="TaskModuleResult">
+        SELECT * FROM task_module
+        WHERE task_id = #{taskId} AND branch = #{branch} AND module_name = '(pending)'
+        LIMIT 1
+    </select>
+
     <insert id="insert" parameterType="com.cicdassistant.entity.TaskModule" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO task_module (
             task_id, branch, module_name, module_path, status, port, pid, pgid,
@@ -62,6 +68,10 @@
             finished_at = #{finishedAt}
         WHERE id = #{id}
     </update>
+
+    <delete id="deleteById">
+        DELETE FROM task_module WHERE id = #{id}
+    </delete>
 
     <delete id="deleteByTaskId">
         DELETE FROM task_module WHERE task_id = #{taskId}

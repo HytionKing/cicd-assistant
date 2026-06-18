@@ -57,6 +57,17 @@ public class TaskService {
         t.setStatus("PENDING");
         t.setCreatedAt(now());
         taskMapper.insert(t);
+        // 提前为每个分支插一行占位，避免详情页空白等到 mvn 编译完
+        for (String b : branches) {
+            if (b == null || b.trim().isEmpty()) continue;
+            TaskModule placeholder = new TaskModule();
+            placeholder.setTaskId(t.getId());
+            placeholder.setBranch(b.trim());
+            placeholder.setModuleName("(pending)");
+            placeholder.setStatus("PENDING");
+            placeholder.setCreatedAt(now());
+            taskModuleMapper.insert(placeholder);
+        }
         return t;
     }
 
@@ -120,19 +131,47 @@ public class TaskService {
             branch = branch.trim();
             if (branch.isEmpty()) continue;
             log.info("[TASK#{}] >>> branch={} begin", taskId, branch);
+            TaskModule placeholder = taskModuleMapper.findPlaceholder(taskId, branch);
             try {
+                if (placeholder != null) {
+                    placeholder.setStatus("CLONING");
+                    placeholder.setStartedAt(now());
+                    taskModuleMapper.update(placeholder);
+                }
                 File repoRoot = buildLaunchService.ensureRepoClone(repo, branch);
+                if (placeholder != null) {
+                    placeholder.setStatus("SCANNING");
+                    taskModuleMapper.update(placeholder);
+                }
                 List<ModuleScanner.Module> modules = buildLaunchService.scanModules(repoRoot, task.getModules());
                 log.info("[TASK#{}] branch={} scanned modules: {}", taskId, branch,
                         modules.stream().map(m -> m.getName() + "(" + m.getRelativePath() + ")").collect(Collectors.toList()));
                 if (modules.isEmpty()) {
                     log.warn("[TASK#{}] no springboot module found in branch={}", taskId, branch);
+                    if (placeholder != null) {
+                        placeholder.setStatus("FAILED");
+                        placeholder.setErrorMessage("no SpringBoot module found");
+                        placeholder.setFinishedAt(now());
+                        taskModuleMapper.update(placeholder);
+                    }
                     errors.append("[").append(branch).append("] no SpringBoot module found; ");
                     continue;
                 }
 
                 Path buildLogPath = buildLaunchService.buildLogPath(taskId, branch);
                 Files.createDirectories(buildLogPath.getParent());
+
+                // 占位删掉，立刻插入扫描到的真实模块行，状态 BUILDING
+                if (placeholder != null) {
+                    taskModuleMapper.deleteById(placeholder.getId());
+                    placeholder = null;
+                }
+                for (ModuleScanner.Module mod : modules) {
+                    TaskModule pre = newModuleRow(taskId, branch, mod, buildLogPath.toString());
+                    pre.setStatus("BUILDING");
+                    pre.setStartedAt(now());
+                    taskModuleMapper.update(pre);
+                }
 
                 boolean buildOk = buildLaunchService.mvnBuild(repoRoot, modules, buildLogPath.toFile());
                 if (!buildOk) {
@@ -151,7 +190,7 @@ public class TaskService {
                 for (ModuleScanner.Module mod : modules) {
                     totalCount++;
                     TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
-                    tm.setStatus("RUNNING");
+                    tm.setStatus("STARTING");
                     tm.setStartedAt(now());
                     taskModuleMapper.update(tm);
 
@@ -203,6 +242,15 @@ public class TaskService {
             } catch (Exception e) {
                 log.error("[TASK#{}] branch processing failed: {}", taskId, branch, e);
                 errors.append("[").append(branch).append("] ").append(e.getMessage()).append("; ");
+                if (placeholder != null && placeholder.getId() != null) {
+                    TaskModule p = taskModuleMapper.findById(placeholder.getId());
+                    if (p != null && !"FAILED".equals(p.getStatus())) {
+                        p.setStatus("FAILED");
+                        p.setErrorMessage(e.getMessage());
+                        p.setFinishedAt(now());
+                        taskModuleMapper.update(p);
+                    }
+                }
             }
             log.info("[TASK#{}] <<< branch={} done", taskId, branch);
         }
