@@ -196,7 +196,8 @@ public class BuildLaunchService {
         Process process = pb.start();
         result.setProcess(process);
 
-        long pid = ProcessManager.getPid(process);
+        // 用 jar 绝对路径作为命令行匹配 token，在 Windows 上从 wmic 拿真 PID
+        long pid = ProcessManager.resolvePid(process, jar.getAbsolutePath());
         result.setPid(pid);
         if (!OsUtil.isWindows()) {
             result.setPgid(ProcessManager.getPgid(pid));
@@ -267,7 +268,7 @@ public class BuildLaunchService {
             long waited = (System.currentTimeMillis() - startedAt) / 1000;
             log.warn("[LAUNCH] module={} startup TIMEOUT after {}s, killing pid={} pgid={}",
                     module.getName(), waited, result.getPid(), result.getPgid());
-            ProcessManager.killTree(result.getPid(), result.getPgid());
+            ProcessManager.killTree(process, result.getPid(), result.getPgid());
             result.setErrorMessage("startup timeout after " + waited
                     + "s (limit=" + appProperties.getTask().getStartupTimeoutSeconds()
                     + "s), process killed");
