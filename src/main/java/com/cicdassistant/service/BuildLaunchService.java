@@ -450,10 +450,12 @@ public class BuildLaunchService {
     }
 
     public Path workspaceLogPath(Long taskId, String branch, String module) {
-        return Paths.get("./build-logs", "task-" + taskId, branch.replace('/', '_'), module + ".log");
+        return Paths.get(appProperties.getPaths().getBuildLogDir(),
+                "task-" + taskId, branch.replace('/', '_'), module + ".log");
     }
 
     public Path buildLogPath(Long taskId, String branch) {
-        return Paths.get("./build-logs", "task-" + taskId, branch.replace('/', '_'), "build.log");
+        return Paths.get(appProperties.getPaths().getBuildLogDir(),
+                "task-" + taskId, branch.replace('/', '_'), "build.log");
     }
 }
