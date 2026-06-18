@@ -211,9 +211,12 @@ public class BuildLaunchService {
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
 
         long timeoutMs = appProperties.getTask().getStartupTimeoutSeconds() * 1000L;
-        long deadline = System.currentTimeMillis() + timeoutMs;
+        long startedAt = System.currentTimeMillis();
+        long deadline = startedAt + timeoutMs;
         boolean started = false;
         int actualPort = port;
+        log.info("[LAUNCH] module={} waiting for startup, timeout={}s", module.getName(),
+                appProperties.getTask().getStartupTimeoutSeconds());
 
         Thread tailThread = new Thread(() -> {
             try {
@@ -228,13 +231,16 @@ public class BuildLaunchService {
         tailThread.setDaemon(true);
         tailThread.start();
 
+        long nextProgressAt = startedAt + 30_000;
         while (System.currentTimeMillis() < deadline) {
             if (!process.isAlive()) {
-                result.setErrorMessage("process exited before startup, exit=" + safeExit(process));
-                fos.close();
+                int exit = safeExit(process);
+                log.warn("[LAUNCH] module={} process exited before startup, exit={} cost={}s",
+                        module.getName(), exit, (System.currentTimeMillis() - startedAt) / 1000);
+                result.setErrorMessage("process exited before startup, exit=" + exit);
+                safeClose(fos);
                 return result;
             }
-            // Tail thread writes log; we read tail to detect status
             String tail = readTail(logFile, 8192);
             if (tail != null) {
                 Matcher mp = portPat.matcher(tail);
@@ -246,17 +252,30 @@ public class BuildLaunchService {
                     break;
                 }
             }
+            long now = System.currentTimeMillis();
+            if (now >= nextProgressAt) {
+                long waited = (now - startedAt) / 1000;
+                long remain = (deadline - now) / 1000;
+                log.info("[LAUNCH] module={} still waiting... waited={}s remain={}s pid={}",
+                        module.getName(), waited, remain, result.getPid());
+                nextProgressAt = now + 30_000;
+            }
             Thread.sleep(1000);
         }
 
         if (!started) {
-            log.warn("[LAUNCH] module={} startup TIMEOUT after {}s",
-                    module.getName(), appProperties.getTask().getStartupTimeoutSeconds());
-            result.setErrorMessage("startup timeout after " + appProperties.getTask().getStartupTimeoutSeconds() + "s");
-            fos.close();
+            long waited = (System.currentTimeMillis() - startedAt) / 1000;
+            log.warn("[LAUNCH] module={} startup TIMEOUT after {}s, killing pid={} pgid={}",
+                    module.getName(), waited, result.getPid(), result.getPgid());
+            ProcessManager.killTree(result.getPid(), result.getPgid());
+            result.setErrorMessage("startup timeout after " + waited
+                    + "s (limit=" + appProperties.getTask().getStartupTimeoutSeconds()
+                    + "s), process killed");
+            safeClose(fos);
             return result;
         }
-        log.info("[LAUNCH] module={} application started, actualPort={}", module.getName(), actualPort);
+        log.info("[LAUNCH] module={} application started, actualPort={}, cost={}s",
+                module.getName(), actualPort, (System.currentTimeMillis() - startedAt) / 1000);
 
         // Probe actuator
         String actuator = StringUtils.defaultIfBlank(repo.getActuatorPath(), appProperties.getHealthCheck().getActuatorPath());
@@ -402,6 +421,11 @@ public class BuildLaunchService {
 
     private int safeExit(Process p) {
         try { return p.exitValue(); } catch (Exception e) { return -1; }
+    }
+
+    private void safeClose(Closeable c) {
+        if (c == null) return;
+        try { c.close(); } catch (IOException ignore) {}
     }
 
     private void drain(InputStream in, OutputStream out) throws IOException {

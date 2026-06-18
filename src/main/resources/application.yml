@@ -59,8 +59,11 @@ app:
     end: 18999
   task:
     max-concurrent: 2
-    startup-timeout-seconds: 300
-    build-timeout-seconds: 1200
+    # 单个模块从 java -jar 启动到日志出现 "Started XxxApplication in" 的最长等待时间。
+    # 这个时间包含 JVM 冷启动、Spring 容器初始化、Nacos 配置拉取、DB 连接、所有 @PostConstruct。
+    # 含 Nacos / 大量 bean / DB 迁移的服务建议给到 600~900。
+    startup-timeout-seconds: 600
+    build-timeout-seconds: 1800
   health-check:
     actuator-path: "/actuator/health"
     swagger-paths:

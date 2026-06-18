@@ -55,8 +55,8 @@ public class AppProperties {
     @Data
     public static class Task {
         private int maxConcurrent = 2;
-        private int startupTimeoutSeconds = 300;
-        private int buildTimeoutSeconds = 1200;
+        private int startupTimeoutSeconds = 600;
+        private int buildTimeoutSeconds = 1800;
     }
 
     @Data
