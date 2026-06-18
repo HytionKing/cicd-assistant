@@ -225,7 +225,7 @@ public class TaskService {
                         } else {
                             tm.setStatus("FAILED");
                             tm.setErrorMessage(lr.getErrorMessage());
-                            ProcessManager.killTree(lr.getPid(), lr.getPgid());
+                            ProcessManager.killTree(lr.getProcess(), lr.getPid(), lr.getPgid());
                             portPool.release(port);
                             errors.append("[").append(branch).append("/").append(mod.getName()).append("] ").append(lr.getErrorMessage()).append("; ");
                         }
