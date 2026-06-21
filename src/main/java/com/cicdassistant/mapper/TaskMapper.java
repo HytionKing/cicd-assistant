@@ -9,6 +9,8 @@ import java.util.List;
 @Mapper
 public interface TaskMapper {
     List<Task> findAll();
+    List<Task> findPage(@Param("offset") int offset, @Param("size") int size);
+    int count();
     Task findById(@Param("id") Long id);
     int insert(Task task);
     int update(Task task);
