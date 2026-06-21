@@ -128,9 +128,11 @@
     if (!btn) return;
     const id = btn.dataset.id;
     if (btn.dataset.act === 'stop') {
-      if (!confirm('确认停止？')) return;
+      const ok = await UI.confirm({ title: '确认停止该模块？', text: '正在运行的进程会被强制终止，对应端口将被释放。' });
+      if (!ok) return;
       await api.post('/api/tasks/modules/' + id + '/stop');
       await load();
+      UI.success('已停止');
     } else if (btn.dataset.act === 'log') {
       stopLogAutoRefresh();
       logContent.textContent = '加载中...';

@@ -69,7 +69,7 @@
     const id = sel.value;
     if (!id) return;
     const branches = Array.from(branchesBox.querySelectorAll('input[type=checkbox]:checked')).map(i => i.value);
-    if (branches.length === 0) { alert('请选择至少一个分支'); return; }
+    if (branches.length === 0) { UI.warning('请选择至少一个分支'); return; }
     const modules = Array.from(modulesBox.querySelectorAll('input[type=checkbox]:checked')).map(i => i.value).join(',');
     try {
       const t = await api.post('/api/tasks', { repoId: Number(id), branches, modules });

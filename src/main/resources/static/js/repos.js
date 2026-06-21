@@ -55,7 +55,8 @@
       else await api.post('/api/repos', data);
       modal.hide();
       await load();
-    } catch (e) { alert('保存失败: ' + e.message); }
+      UI.success(id ? '仓库已更新' : '仓库已新建');
+    } catch (e) { UI.danger('保存失败: ' + e.message); }
   };
 
   tbody.addEventListener('click', async (ev) => {
@@ -67,18 +68,21 @@
       const r = await api.get('/api/repos/' + id);
       openModal(r);
     } else if (act === 'del') {
-      if (!confirm('确认删除？')) return;
+      const ok = await UI.confirm({ title: '确认删除该仓库？', text: '相关任务历史不会被删除，但今后无法再用此配置启动新任务。' });
+      if (!ok) return;
       await api.del('/api/repos/' + id);
       await load();
+      UI.success('仓库已删除');
     } else if (act === 'test') {
       const original = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>测试中';
       try {
         const r = await api.post('/api/repos/' + id + '/test-connection');
-        alert(r.success ? ('连接成功：' + r.message) : ('连接失败：' + r.message));
+        if (r.success) UI.success('连接成功：' + r.message, { duration: 6000 });
+        else UI.danger('连接失败：' + r.message, { duration: 8000 });
       } catch (e) {
-        alert('请求失败: ' + e.message);
+        UI.danger('请求失败: ' + e.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = original;
