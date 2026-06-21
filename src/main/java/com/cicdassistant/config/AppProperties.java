@@ -72,6 +72,21 @@ public class AppProperties {
         private String actuatorPath = "/actuator/health";
         private List<String> swaggerPaths = new ArrayList<>();
         private int probeIntervalMs = 2000;
+        /**
+         * 判定服务启动完成的正则。
+         * 默认匹配 Spring Boot 标准日志 "Started XxxApplication in 12.34 seconds"，
+         * 也兼容自定义 main 类名（不一定以 Application 结尾），\S+ 即可。
+         */
+        private String startedPattern = "Started\\s+\\S+\\s+in\\s+[\\d.]+\\s+seconds";
+        /**
+         * 从日志抓真实端口的正则，必须有一个捕获组返回端口数字。
+         * 默认同时识别 Tomcat / Undertow / Jetty / Netty / WebServer：
+         *   Tomcat started on port(s): 8080
+         *   Undertow started on port(s) 8080 (http)
+         *   Jetty started on port 8080
+         *   Netty started on port 8080
+         */
+        private String portPattern = "(?:Tomcat|Undertow|Jetty|Netty|WebServer)\\s+started\\s+on\\s+port(?:\\(s\\))?[:\\s]+(\\d+)";
     }
 
     @Data

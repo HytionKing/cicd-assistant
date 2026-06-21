@@ -80,5 +80,12 @@ app:
       - "/swagger-ui.html"
       - "/doc.html"
     probe-interval-ms: 2000
+    # 服务启动完成判定正则。默认匹配 Spring Boot 的 "Started XxxApplication in 12.34 seconds"
+    # 形式（main 类名任意，不必以 Application 结尾）。如果你的服务输出格式不同可以改这里。
+    started-pattern: "Started\\s+\\S+\\s+in\\s+[\\d.]+\\s+seconds"
+    # 抓真实监听端口的正则，必须有捕获组返回端口数字。
+    # 默认同时识别：Tomcat / Undertow / Jetty / Netty / WebServer。
+    # 示例匹配："Tomcat started on port(s): 8080"、"Undertow started on port(s) 8080 (http)"
+    port-pattern: "(?:Tomcat|Undertow|Jetty|Netty|WebServer)\\s+started\\s+on\\s+port(?:\\(s\\))?[:\\s]+(\\d+)"
   gitlab:
     default-branch-prefix: ""

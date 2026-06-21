@@ -205,8 +205,8 @@ public class BuildLaunchService {
         log.info("[LAUNCH] module={} pid={} pgid={} logFile={}",
                 module.getName(), pid, result.getPgid(), logFile.getAbsolutePath());
 
-        Pattern startedPat = Pattern.compile("Started\\s+\\S+Application\\s+in");
-        Pattern portPat = Pattern.compile("Tomcat started on port\\(?s\\)?:?\\s*(\\d+)");
+        Pattern startedPat = Pattern.compile(appProperties.getHealthCheck().getStartedPattern());
+        Pattern portPat = Pattern.compile(appProperties.getHealthCheck().getPortPattern());
 
         FileOutputStream fos = new FileOutputStream(logFile);
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
