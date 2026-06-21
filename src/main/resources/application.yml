@@ -43,6 +43,11 @@ management:
         include: health,info
 
 app:
+  # 给最终用户展示 Swagger 链接时用的主机/IP。
+  # cicd-assistant 自己探测 swagger 仍走 127.0.0.1（同机最快），但展示链接需要替换成
+  # 用户浏览器能访问到的地址。本地开发留空即可（落回 127.0.0.1）；
+  # 部署到内网/公网服务器时填服务器实际 IP 或域名，例如 10.0.80.123 或 cicd.example.com。
+  public-host: ""
   paths:
     # SQLite 数据库所在目录（app.db 会落在这里）
     data-dir: ./data

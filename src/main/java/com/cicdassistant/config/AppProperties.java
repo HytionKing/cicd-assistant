@@ -12,6 +12,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
+    private String publicHost = "";
     private Paths paths = new Paths();
     private Auth auth = new Auth();
     private Workspace workspace = new Workspace();
