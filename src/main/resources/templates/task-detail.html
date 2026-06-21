@@ -21,7 +21,10 @@
                         </h2>
                     </div>
                     <div class="col-auto">
-                        <a th:href="@{/tasks}" class="btn"><i class="ti ti-arrow-left me-1"></i>返回</a>
+                        <div class="btn-list">
+                            <button id="btn-refresh" class="btn"><i class="ti ti-refresh me-1"></i>刷新</button>
+                            <a th:href="@{/tasks}" class="btn"><i class="ti ti-arrow-left me-1"></i>返回</a>
+                        </div>
                     </div>
                 </div>
             </div>

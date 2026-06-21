@@ -25,8 +25,14 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<Task> list() {
-        return taskService.listTasks();
+    public Map<String, Object> list(@RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(defaultValue = "20") int size) {
+        Map<String, Object> r = new HashMap<>();
+        r.put("items", taskService.page(page, size));
+        r.put("total", taskService.total());
+        r.put("page", page);
+        r.put("size", size);
+        return r;
     }
 
     @GetMapping("/{id}")

@@ -19,6 +19,14 @@
         SELECT * FROM task ORDER BY id DESC
     </select>
 
+    <select id="findPage" resultMap="TaskResult">
+        SELECT * FROM task ORDER BY id DESC LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(1) FROM task
+    </select>
+
     <select id="findById" resultMap="TaskResult">
         SELECT * FROM task WHERE id = #{id}
     </select>

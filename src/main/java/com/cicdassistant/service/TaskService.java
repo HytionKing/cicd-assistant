@@ -75,6 +75,16 @@ public class TaskService {
         return taskMapper.findAll();
     }
 
+    public List<Task> page(int page, int size) {
+        int p = Math.max(1, page);
+        int s = Math.min(Math.max(1, size), 100);
+        return taskMapper.findPage((p - 1) * s, s);
+    }
+
+    public int total() {
+        return taskMapper.count();
+    }
+
     public Task get(Long id) {
         return taskMapper.findById(id);
     }
