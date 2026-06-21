@@ -31,6 +31,25 @@
     margin: 0;
 }
 
+/* 全局 toast 容器：右上角浮层 */
+.toast-host {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2000;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+.toast-host > .alert {
+    min-width: 280px;
+    margin-bottom: 0;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .15);
+    pointer-events: auto;
+}
+
 /* 侧栏 brand 区域上下间距收紧 */
 .navbar-vertical .navbar-brand {
     padding: 1rem 1.25rem;
