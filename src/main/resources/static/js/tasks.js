@@ -5,6 +5,7 @@
   let pageSize = 20;
   let currentPage = 1;
   let total = 0;
+  let lastPagerState = '';
 
   function statusBadge(s) {
     const cls = STATUS_BADGE[s] || 'bg-secondary-lt';
@@ -29,6 +30,12 @@
   function renderPager() {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     if (currentPage > totalPages) currentPage = totalPages;
+    // 状态没变就不动 DOM —— 否则定时轮询每 5 秒重建 pager，会销毁
+    // Bootstrap 已经绑好的 dropdown 实例，导致下拉点不开
+    const state = `${total}|${currentPage}|${pageSize}|${totalPages}`;
+    if (state === lastPagerState) return;
+    lastPagerState = state;
+
     const items = pageItems(currentPage, totalPages);
     const prevDis = currentPage <= 1 ? 'disabled' : '';
     const nextDis = currentPage >= totalPages ? 'disabled' : '';
@@ -65,6 +72,10 @@
         </ul>
       </div>
     `;
+    // 重渲染后显式初始化 dropdown 实例（万一 Bootstrap 代理事件没接管成功也兜底）
+    pagerEl.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(t => {
+      bootstrap.Dropdown.getOrCreateInstance(t);
+    });
   }
 
   async function load() {
