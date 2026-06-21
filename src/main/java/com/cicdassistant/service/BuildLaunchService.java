@@ -288,26 +288,29 @@ public class BuildLaunchService {
         boolean actuatorOk = probe(actuatorUrl);
         log.info("[PROBE] module={} actuator {} -> {}", module.getName(), actuatorUrl, actuatorOk ? "OK" : "FAIL");
 
-        // Probe swagger paths
+        // Probe swagger paths (探测必须用 127.0.0.1，本机最快最稳)
         List<String> swaggerPaths = parsePaths(repo.getSwaggerPaths());
         if (swaggerPaths.isEmpty()) swaggerPaths = appProperties.getHealthCheck().getSwaggerPaths();
-        String swaggerHit = null;
+        String hitPath = null;
         for (String sp : swaggerPaths) {
             String url = "http://127.0.0.1:" + actualPort + sp;
             boolean ok = probe(url);
             log.info("[PROBE] module={} swagger {} -> {}", module.getName(), url, ok ? "OK" : "miss");
             if (ok) {
-                swaggerHit = url;
+                hitPath = sp;
                 break;
             }
         }
 
-        if (swaggerHit == null) {
+        if (hitPath == null) {
             log.warn("[LAUNCH] module={} swagger not reachable (actuator={})", module.getName(), actuatorOk);
             result.setErrorMessage("swagger not reachable (actuator=" + actuatorOk + ")");
             return result;
         }
 
+        // 展示给用户的链接换成 app.public-host 配的主机，方便从浏览器/外网访问
+        String displayHost = StringUtils.defaultIfBlank(appProperties.getPublicHost(), "127.0.0.1");
+        String swaggerHit = "http://" + displayHost + ":" + actualPort + hitPath;
         result.setPort(actualPort);
         result.setSwaggerUrl(swaggerHit);
         result.setSuccess(true);
