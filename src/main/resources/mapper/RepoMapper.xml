@@ -17,6 +17,7 @@
         <result property="actuatorPath" column="actuator_path"/>
         <result property="jvmArgs" column="jvm_args"/>
         <result property="springProfile" column="spring_profile"/>
+        <result property="modules" column="modules"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
@@ -37,11 +38,11 @@
         INSERT INTO repo (
             name, git_url, gitlab_host, project_path, auth_type, access_token,
             username, password, branch_prefix, swagger_paths, actuator_path,
-            jvm_args, spring_profile, created_at, updated_at
+            jvm_args, spring_profile, modules, created_at, updated_at
         ) VALUES (
             #{name}, #{gitUrl}, #{gitlabHost}, #{projectPath}, #{authType}, #{accessToken},
             #{username}, #{password}, #{branchPrefix}, #{swaggerPaths}, #{actuatorPath},
-            #{jvmArgs}, #{springProfile}, #{createdAt}, #{updatedAt}
+            #{jvmArgs}, #{springProfile}, #{modules}, #{createdAt}, #{updatedAt}
         )
     </insert>
 
@@ -60,6 +61,7 @@
             actuator_path = #{actuatorPath},
             jvm_args = #{jvmArgs},
             spring_profile = #{springProfile},
+            modules = #{modules},
             updated_at = #{updatedAt}
         WHERE id = #{id}
     </update>

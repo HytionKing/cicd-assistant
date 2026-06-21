@@ -50,6 +50,9 @@
                         <label>Actuator 路径<input name="actuatorPath" placeholder="/actuator/health"/></label>
                         <label>Spring Profile<input name="springProfile" placeholder="dev"/></label>
                         <label class="full">JVM 参数<input name="jvmArgs" placeholder="-Xms256m -Xmx1g"/></label>
+                        <label class="full">模块列表（可选，逗号分隔；留空时启动任务走自动扫描）
+                            <input name="modules" placeholder="user-service,order-service,common"/>
+                        </label>
                     </div>
                     <div class="actions">
                         <button type="button" id="btn-cancel" class="btn">取消</button>

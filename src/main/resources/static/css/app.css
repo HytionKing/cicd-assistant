@@ -43,6 +43,16 @@ body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", "Micros
 
 .branches-box { margin-top: 12px; max-height: 280px; overflow: auto; border: 1px solid #ebeef5; padding: 8px; background: #fafbfc; }
 .branches-box label { display: block; padding: 2px 0; font-size: 13px; }
+.modules-section { font-size: 13px; }
+.modules-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.modules-title { font-weight: 600; color: #555; }
+.modules-actions a { color: #3a8ee6; text-decoration: none; font-size: 12px; }
+.modules-actions a:hover { text-decoration: underline; }
+.modules-actions .sep { color: #aaa; margin: 0 4px; font-size: 12px; }
+.modules-actions.hidden { display: none; }
+.modules-box { max-height: 220px; overflow: auto; border: 1px solid #ebeef5; padding: 8px; background: #fafbfc; }
+.modules-box label { display: block; padding: 2px 0; font-size: 13px; }
+.modules-box .hint { color: #909399; font-size: 12px; }
 
 .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
 .status.PENDING  { background: #ecf5ff; color: #409eff; }

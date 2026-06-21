@@ -21,9 +21,19 @@
 
             <div id="branches-box" class="branches-box"></div>
 
-            <label class="block mt">手动指定模块（逗号分隔，可留空）
-                <input id="inp-modules" placeholder="例如 user-service,order-service"/>
-            </label>
+            <div class="modules-section mt">
+                <div class="modules-header">
+                    <span class="modules-title">模块</span>
+                    <span id="modules-actions" class="modules-actions hidden">
+                        <a href="#" id="btn-all">全选</a>
+                        <span class="sep">|</span>
+                        <a href="#" id="btn-none">全不选</a>
+                    </span>
+                </div>
+                <div id="modules-box" class="modules-box">
+                    <span class="hint">选择仓库后会自动加载</span>
+                </div>
+            </div>
 
             <div class="actions mt">
                 <button id="btn-start" class="btn primary">开始验证</button>
