@@ -44,7 +44,8 @@ window.UI = (function () {
   function ensureConfirm() {
     if (confirmEl) return { el: confirmEl, modal: confirmInstance };
     confirmEl = document.createElement('div');
-    confirmEl.className = 'modal modal-blur fade';
+    // 不用 modal-blur：任务列表/详情页有定时轮询，背景重渲染会让 backdrop-filter 闪烁
+    confirmEl.className = 'modal fade';
     confirmEl.tabIndex = -1;
     confirmEl.innerHTML = `
       <div class="modal-dialog modal-sm modal-dialog-centered">
