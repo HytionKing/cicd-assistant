@@ -9,7 +9,7 @@ spring:
   application:
     name: cicd-assistant
   datasource:
-    url: jdbc:sqlite:./data/app.db
+    url: jdbc:sqlite:${app.paths.data-dir:./data}/app.db
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 4
@@ -30,12 +30,10 @@ mybatis:
 
 logging:
   file:
-    name: ./logs/app.log
+    name: ${app.paths.log-dir:./logs}/app.log
   level:
     root: INFO
     com.cicdassistant: DEBUG
-    # mapper 包属于 com.cicdassistant，但 MyBatis 在 DEBUG 下会把每条 SQL + 参数 + 结果集都打出来，
-    # 噪声很大，单独把 mapper 包降到 INFO；需要排查 SQL 时再临时调成 DEBUG。
     com.cicdassistant.mapper: INFO
 
 management:
@@ -45,11 +43,19 @@ management:
         include: health,info
 
 app:
+  paths:
+    # SQLite 数据库所在目录（app.db 会落在这里）
+    data-dir: ./data
+    # 应用自身日志目录（app.log 在这里）
+    log-dir: ./logs
+    # 任务的编译 / 运行日志目录（按 task-N/branch/ 分子目录）
+    build-log-dir: ./build-logs
   auth:
     users:
       - { username: admin, password: admin123 }
     secret-key: "CicdAssistant2026"
   workspace:
+    # 克隆代码的根目录，按 repo/branch 分子目录
     root: ./workspace
     keep-alive-minutes: 5
     log-retention-days: 7

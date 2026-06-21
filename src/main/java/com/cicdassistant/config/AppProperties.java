@@ -12,6 +12,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
+    private Paths paths = new Paths();
     private Auth auth = new Auth();
     private Workspace workspace = new Workspace();
     private Maven maven = new Maven();
@@ -19,6 +20,13 @@ public class AppProperties {
     private Task task = new Task();
     private HealthCheck healthCheck = new HealthCheck();
     private GitLab gitlab = new GitLab();
+
+    @Data
+    public static class Paths {
+        private String dataDir = "./data";
+        private String logDir = "./logs";
+        private String buildLogDir = "./build-logs";
+    }
 
     @Data
     public static class Auth {
