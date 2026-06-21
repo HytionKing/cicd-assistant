@@ -53,6 +53,17 @@
     pointer-events: auto;
 }
 
+/* 分页栏所在的 card-footer 默认可能裁剪溢出，dropdown 弹层会被切。
+   显式放开，并提高 z-index 让菜单浮在最前。 */
+#task-pager,
+#task-pager .dropup,
+#task-pager .dropdown {
+    overflow: visible;
+}
+#task-pager .dropdown-menu {
+    z-index: 1050;
+}
+
 /* 侧栏 brand 区域上下间距收紧 */
 .navbar-vertical .navbar-brand {
     padding: 1rem 1.25rem;
