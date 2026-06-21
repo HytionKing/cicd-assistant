@@ -4,7 +4,7 @@
   const tbody = document.getElementById('modules-tbody');
   const refreshBtn = document.getElementById('btn-refresh');
   const logModalEl = document.getElementById('log-modal');
-  const logModal = new bootstrap.Modal(logModalEl);
+  const logModal = new tabler.Modal(logModalEl);
   const logContent = document.getElementById('log-content');
   const logTitle = document.getElementById('log-title');
   const chkLogAuto = document.getElementById('chk-log-auto');

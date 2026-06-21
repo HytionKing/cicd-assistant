@@ -33,7 +33,7 @@ window.UI = (function () {
     host.appendChild(el);
     if (duration > 0) {
       setTimeout(() => {
-        if (el.parentNode) bootstrap.Alert.getOrCreateInstance(el).close();
+        if (el.parentNode) tabler.Alert.getOrCreateInstance(el).close();
       }, duration);
     }
   }
@@ -69,7 +69,7 @@ window.UI = (function () {
       </div>
     `;
     document.body.appendChild(confirmEl);
-    confirmInstance = new bootstrap.Modal(confirmEl);
+    confirmInstance = new tabler.Modal(confirmEl);
     return { el: confirmEl, modal: confirmInstance };
   }
 

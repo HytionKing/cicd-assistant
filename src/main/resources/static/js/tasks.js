@@ -73,7 +73,7 @@
     `;
     // 重渲染后显式初始化 dropdown 实例（兜底）
     pagerEl.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(t => {
-      bootstrap.Dropdown.getOrCreateInstance(t);
+      tabler.Dropdown.getOrCreateInstance(t);
     });
   }
 

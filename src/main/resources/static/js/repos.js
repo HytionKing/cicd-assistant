@@ -1,7 +1,7 @@
 (async function () {
   const tbody = document.getElementById('repo-tbody');
   const modalEl = document.getElementById('modal-repo');
-  const modal = new bootstrap.Modal(modalEl);
+  const modal = new tabler.Modal(modalEl);
   const form = document.getElementById('repo-form');
   const title = document.getElementById('modal-title');
 
