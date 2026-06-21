@@ -13,7 +13,7 @@
     <div th:replace="~{layout :: sidebar('tasks')}"></div>
     <div class="page-wrapper">
         <div class="page-header">
-            <div class="container-xl">
+            <div class="container-fluid">
                 <div class="row align-items-center">
                     <div class="col">
                         <h2 class="page-title">
@@ -28,7 +28,7 @@
         </div>
 
         <div class="page-body">
-            <div class="container-xl">
+            <div class="container-fluid">
                 <div class="card mb-3">
                     <div class="card-body" id="task-summary"></div>
                 </div>
@@ -51,8 +51,8 @@
     </div>
 </div>
 
-<!-- 日志查看模态框 -->
-<div class="modal modal-blur fade" id="log-modal" tabindex="-1" aria-hidden="true">
+<!-- 日志查看模态框（不用 modal-blur 避免 backdrop-filter 在背景重渲染时闪烁） -->
+<div class="modal fade" id="log-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">

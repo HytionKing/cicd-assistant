@@ -64,9 +64,28 @@
     try {
       const r = await api.get('/api/tasks/modules/' + reqModuleId + '/log?type=' + reqType);
       if (myToken !== logRequestToken) return;
-      const atBottom = logContent.scrollTop + logContent.clientHeight >= logContent.scrollHeight - 20;
-      logContent.textContent = r.content || '(空)';
-      if (atBottom) logContent.scrollTop = logContent.scrollHeight;
+      const newText = r.content || '(空)';
+      const oldText = logContent.textContent || '';
+      if (newText === oldText) return;
+
+      const prevScrollTop = logContent.scrollTop;
+      const wasAtBottom = prevScrollTop + logContent.clientHeight >= logContent.scrollHeight - 20;
+
+      // 日志只增长（追加新行）的常态用 appendChild 增量更新：
+      //   - 浏览器只需要绘制新增的尾部，旧 DOM 不动 → 看着不闪
+      //   - 也不会触发整个 <pre> 的重排
+      // 只有 tail 滚动（旧的 1MB 被截掉，新的 1MB 替进来）这种少数情况才走 textContent 全量替换
+      if (oldText && newText.startsWith(oldText)) {
+        const delta = newText.substring(oldText.length);
+        logContent.appendChild(document.createTextNode(delta));
+      } else {
+        logContent.textContent = newText;
+        // 全量替换 scrollTop 会被重置成 0，原来用户在中间的位置要还回去
+        logContent.scrollTop = prevScrollTop;
+      }
+      if (wasAtBottom) {
+        logContent.scrollTop = logContent.scrollHeight;
+      }
     } catch (e) {
       if (myToken !== logRequestToken) return;
       logContent.textContent = '加载失败: ' + e.message;
@@ -128,12 +147,23 @@
   document.getElementById('btn-log-refresh').onclick = loadLog;
   document.getElementById('chk-log-auto').onchange = startLogAutoRefresh;
 
+  // 模态框打开时，停掉外层的 4 秒轮询。外层会重建 tbody，连带触发模态框背景重绘 → 视觉闪烁。
+  // 用户的关注点已经在日志窗里，外层暂停 4 秒一次的刷新没影响。
+  let outerLoadTimer = null;
+  function startOuterPoll() {
+    if (!outerLoadTimer) outerLoadTimer = setInterval(load, 4000);
+  }
+  function stopOuterPoll() {
+    if (outerLoadTimer) { clearInterval(outerLoadTimer); outerLoadTimer = null; }
+  }
+  logModalEl.addEventListener('show.bs.modal', stopOuterPoll);
   logModalEl.addEventListener('hidden.bs.modal', () => {
     stopLogAutoRefresh();
     currentModuleId = null;
     logRequestToken++;
+    startOuterPoll();
   });
 
   await load();
-  setInterval(load, 4000);
+  startOuterPoll();
 })();
