@@ -42,14 +42,13 @@
 
     pagerEl.innerHTML = `
       <div class="d-flex align-items-center">
-        <div class="dropdown">
-          <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <div class="dropup">
+          <button class="btn dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false">
             ${pageSize} 条/页
           </button>
           <div class="dropdown-menu">
-            ${PAGE_SIZES.map(n => `
-              <a class="dropdown-item ${n === pageSize ? 'active' : ''}" href="#" data-size="${n}">${n} 条/页</a>
-            `).join('')}
+            ${PAGE_SIZES.map(n => `<a class="dropdown-item ${n === pageSize ? 'active' : ''}" href="#" data-size="${n}">${n} 条/页</a>`).join('')}
           </div>
         </div>
         <div class="text-secondary small ms-3 d-none d-md-inline">共 ${total} 条</div>
@@ -72,7 +71,7 @@
         </ul>
       </div>
     `;
-    // 重渲染后显式初始化 dropdown 实例（万一 Bootstrap 代理事件没接管成功也兜底）
+    // 重渲染后显式初始化 dropdown 实例（兜底）
     pagerEl.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(t => {
       bootstrap.Dropdown.getOrCreateInstance(t);
     });
