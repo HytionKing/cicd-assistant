@@ -1,84 +1,44 @@
-* { box-sizing: border-box; }
-body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f7fa; color: #333; }
-.app { display: flex; min-height: 100vh; }
-.sidebar { width: 200px; background: #1f2d3d; color: #cfd8e3; padding: 20px 0; display: flex; flex-direction: column; }
-.sidebar h1 { color: #fff; font-size: 16px; margin: 0 20px 24px; }
-.sidebar nav { display: flex; flex-direction: column; flex: 1; }
-.sidebar nav a { color: #cfd8e3; padding: 12px 20px; text-decoration: none; }
-.sidebar nav a:hover { background: #28384d; color: #fff; }
-.sidebar nav a.active { background: #3a8ee6; color: #fff; }
-.sidebar .logout { padding: 10px 20px; }
-.sidebar .logout button { width: 100%; background: transparent; color: #cfd8e3; border: 1px solid #4a5a70; padding: 6px; cursor: pointer; }
-.content { flex: 1; padding: 24px; overflow-x: auto; }
+/* Tabler 基础样式已覆盖大部分，这里只放业务相关小补丁 */
 
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { margin: 0; font-size: 20px; }
+/* 分支/模块选择列表样式（介于表单和多选框之间） */
+.select-list {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-bg-surface);
+    padding: 8px 10px;
+}
 
-.btn { background: #fff; border: 1px solid #d0d7de; padding: 6px 14px; border-radius: 4px; cursor: pointer; color: #333; text-decoration: none; display: inline-block; }
-.btn.primary { background: #3a8ee6; color: #fff; border-color: #3a8ee6; }
-.btn.danger { background: #e64340; color: #fff; border-color: #e64340; }
-.btn + .btn { margin-left: 6px; }
+.select-list .form-check {
+    margin-bottom: 0.15rem;
+}
 
-.table { width: 100%; background: #fff; border-collapse: collapse; }
-.table th, .table td { border-bottom: 1px solid #ebeef5; padding: 8px 10px; text-align: left; font-size: 13px; }
-.table th { background: #f4f6f8; font-weight: 600; }
+.hidden { display: none !important; }
 
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal.hidden { display: none; }
-.modal-box { background: #fff; border-radius: 6px; padding: 24px; width: 720px; max-width: 90vw; max-height: 90vh; overflow: auto; }
-.modal-box.wide { width: 960px; }
-.modal-box h3 { margin: 0 0 16px; }
+/* 日志查看框：深色背景 + 等宽字体，撑满模态框可滚 */
+.log-box {
+    background: #1e1e1e;
+    color: #e8e8e8;
+    border-radius: var(--tblr-border-radius);
+    padding: 12px;
+    max-height: 65vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 12px;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    margin: 0;
+}
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.grid-2 label { display: flex; flex-direction: column; font-size: 13px; gap: 4px; }
-.grid-2 label.full { grid-column: span 2; }
-.grid-2 input, .grid-2 select { padding: 6px 8px; border: 1px solid #d0d7de; border-radius: 4px; font-size: 13px; }
-.actions { margin-top: 16px; text-align: right; }
+/* 侧栏 brand 区域上下间距收紧 */
+.navbar-vertical .navbar-brand {
+    padding: 1rem 1.25rem;
+    font-size: 1.05rem;
+}
 
-.card { background: #fff; border-radius: 6px; padding: 16px; }
-.block { display: block; margin: 8px 0; font-size: 13px; }
-.block input, .block select { padding: 6px 8px; border: 1px solid #d0d7de; border-radius: 4px; font-size: 13px; min-width: 320px; margin-left: 8px; }
-.mt { margin-top: 12px; }
-.msg { margin-top: 12px; color: #555; font-size: 13px; }
-
-.branches-box { margin-top: 12px; max-height: 280px; overflow: auto; border: 1px solid #ebeef5; padding: 8px; background: #fafbfc; }
-.branches-box label { display: block; padding: 2px 0; font-size: 13px; }
-.modules-section { font-size: 13px; }
-.modules-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.modules-title { font-weight: 600; color: #555; }
-.modules-actions a { color: #3a8ee6; text-decoration: none; font-size: 12px; }
-.modules-actions a:hover { text-decoration: underline; }
-.modules-actions .sep { color: #aaa; margin: 0 4px; font-size: 12px; }
-.modules-actions.hidden { display: none; }
-.modules-box { max-height: 220px; overflow: auto; border: 1px solid #ebeef5; padding: 8px; background: #fafbfc; }
-.modules-box label { display: block; padding: 2px 0; font-size: 13px; }
-.modules-box .hint { color: #909399; font-size: 12px; }
-
-.status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-.status.PENDING  { background: #ecf5ff; color: #409eff; }
-.status.CLONING  { background: #ecf5ff; color: #409eff; }
-.status.SCANNING { background: #ecf5ff; color: #409eff; }
-.status.BUILDING { background: #fdf6ec; color: #e6a23c; }
-.status.STARTING { background: #fdf6ec; color: #e6a23c; }
-.status.RUNNING  { background: #fdf6ec; color: #e6a23c; }
-.status.SUCCESS  { background: #f0f9eb; color: #67c23a; }
-.status.FAILED   { background: #fef0f0; color: #f56c6c; }
-.status.PARTIAL  { background: #fdf6ec; color: #e6a23c; }
-.status.STOPPED  { background: #f4f4f5; color: #909399; }
-
-.log { background: #1e1e1e; color: #eee; padding: 12px; max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
-.log-tabs { margin-bottom: 8px; }
-.log-tabs .tab { background: #eef1f5; border: 1px solid #d0d7de; padding: 4px 10px; cursor: pointer; }
-.log-tabs .tab.active { background: #3a8ee6; color: #fff; border-color: #3a8ee6; }
-.auto-refresh { font-size: 12px; color: #666; margin-right: 12px; }
-.auto-refresh input { vertical-align: middle; }
-
-.login-body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #1f2d3d; }
-.login-box { background: #fff; padding: 32px 36px; border-radius: 8px; width: 320px; }
-.login-box h2 { margin: 0 0 20px; font-size: 18px; }
-.login-box .form-row { margin-bottom: 12px; }
-.login-box label { display: block; margin-bottom: 4px; font-size: 13px; }
-.login-box input { width: 100%; padding: 8px; border: 1px solid #d0d7de; border-radius: 4px; }
-.login-box button { width: 100%; padding: 8px; background: #3a8ee6; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
-.login-box .error { color: #e64340; font-size: 13px; }
-.login-box .info { color: #67c23a; font-size: 13px; }
+/* 页头 icon 大小和文字对齐 */
+.page-title .ti {
+    font-size: 1.4rem;
+    vertical-align: -3px;
+}

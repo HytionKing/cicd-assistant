@@ -2,67 +2,108 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>仓库管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>仓库管理 - CICD Assistant</title>
+    <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
+    <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
     <link rel="stylesheet" th:href="@{/css/app.css}"/>
 </head>
 <body>
-<div class="app">
+<div class="page">
     <div th:replace="~{layout :: sidebar('repos')}"></div>
-    <main class="content">
-        <header class="page-header">
-            <h2>仓库管理</h2>
-            <button id="btn-new" class="btn primary">新建仓库</button>
-        </header>
+    <div class="page-wrapper">
+        <div class="page-header d-print-none">
+            <div class="container-xl">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h2 class="page-title"><i class="ti ti-database me-2"></i>仓库管理</h2>
+                    </div>
+                    <div class="col-auto">
+                        <button id="btn-new" class="btn btn-primary">
+                            <i class="ti ti-plus me-1"></i>新建仓库
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-        <table class="table">
-            <thead>
-            <tr>
-                <th>ID</th><th>名称</th><th>GitLab Host</th><th>项目路径</th>
-                <th>分支前缀</th><th>认证</th><th>操作</th>
-            </tr>
-            </thead>
-            <tbody id="repo-tbody"></tbody>
-        </table>
+        <div class="page-body">
+            <div class="container-xl">
+                <div class="card">
+                    <div class="table-responsive">
+                        <table class="table table-vcenter card-table">
+                            <thead>
+                            <tr>
+                                <th>ID</th><th>名称</th><th>GitLab Host</th><th>项目路径</th>
+                                <th>分支前缀</th><th>认证</th><th class="text-end">操作</th>
+                            </tr>
+                            </thead>
+                            <tbody id="repo-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-        <div id="modal" class="modal hidden">
-            <div class="modal-box">
-                <h3 id="modal-title">新建仓库</h3>
-                <form id="repo-form">
-                    <input type="hidden" name="id"/>
-                    <div class="grid-2">
-                        <label>名称<input name="name" required/></label>
-                        <label>Git URL<input name="gitUrl" required placeholder="https://git.example.com/group/repo.git"/></label>
-                        <label>GitLab Host<input name="gitlabHost" placeholder="https://git.example.com"/></label>
-                        <label>Project Path<input name="projectPath" placeholder="group/repo"/></label>
-                        <label>认证类型
-                            <select name="authType">
+<!-- Repo 编辑/新建模态框 -->
+<div class="modal modal-blur fade" id="modal-repo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-title">新建仓库</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <form id="repo-form">
+                <input type="hidden" name="id"/>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">名称</label>
+                            <input class="form-control" name="name" required/></div>
+                        <div class="col-md-6"><label class="form-label">Git URL</label>
+                            <input class="form-control" name="gitUrl" required placeholder="https://git.example.com/group/repo.git"/></div>
+                        <div class="col-md-6"><label class="form-label">GitLab Host</label>
+                            <input class="form-control" name="gitlabHost" placeholder="https://git.example.com"/></div>
+                        <div class="col-md-6"><label class="form-label">Project Path</label>
+                            <input class="form-control" name="projectPath" placeholder="group/repo"/></div>
+                        <div class="col-md-6"><label class="form-label">认证类型</label>
+                            <select class="form-select" name="authType">
                                 <option value="TOKEN">TOKEN</option>
                                 <option value="PASSWORD">PASSWORD</option>
                             </select>
-                        </label>
-                        <label>Access Token<input name="accessToken" placeholder="留空保留原值，*** 表示已存"/></label>
-                        <label>Username<input name="username"/></label>
-                        <label>Password<input name="password" type="password" placeholder="留空保留原值"/></label>
-                        <label>分支前缀<input name="branchPrefix" placeholder="release/, feature/ 等"/></label>
-                        <label>Swagger 路径
-                            <input name="swaggerPaths" placeholder="/swagger-ui/index.html,/doc.html"/>
-                        </label>
-                        <label>Actuator 路径<input name="actuatorPath" placeholder="/actuator/health"/></label>
-                        <label>Spring Profile<input name="springProfile" placeholder="dev"/></label>
-                        <label class="full">JVM 参数<input name="jvmArgs" placeholder="-Xms256m -Xmx1g"/></label>
-                        <label class="full">模块列表（可选，逗号分隔；留空时启动任务走自动扫描）
-                            <input name="modules" placeholder="user-service,order-service,common"/>
-                        </label>
+                        </div>
+                        <div class="col-md-6"><label class="form-label">Access Token</label>
+                            <input class="form-control" name="accessToken" placeholder="留空保留原值；*** 表示已存"/></div>
+                        <div class="col-md-6"><label class="form-label">Username</label>
+                            <input class="form-control" name="username"/></div>
+                        <div class="col-md-6"><label class="form-label">Password</label>
+                            <input class="form-control" type="password" name="password" placeholder="留空保留原值"/></div>
+                        <div class="col-md-6"><label class="form-label">分支前缀</label>
+                            <input class="form-control" name="branchPrefix" placeholder="release/, feature/"/></div>
+                        <div class="col-md-6"><label class="form-label">Spring Profile</label>
+                            <input class="form-control" name="springProfile" placeholder="dev"/></div>
+                        <div class="col-md-6"><label class="form-label">Actuator 路径</label>
+                            <input class="form-control" name="actuatorPath" placeholder="/actuator/health"/></div>
+                        <div class="col-md-6"><label class="form-label">Swagger 路径</label>
+                            <input class="form-control" name="swaggerPaths" placeholder="/swagger-ui/index.html,/doc.html"/></div>
+                        <div class="col-12"><label class="form-label">JVM 参数</label>
+                            <input class="form-control" name="jvmArgs" placeholder="-Xms256m -Xmx1g"/></div>
+                        <div class="col-12"><label class="form-label">模块列表（可选，逗号分隔）</label>
+                            <input class="form-control" name="modules" placeholder="user-service,order-service,common"/>
+                            <small class="form-hint">留空时启动任务走自动扫描。</small></div>
                     </div>
-                    <div class="actions">
-                        <button type="button" id="btn-cancel" class="btn">取消</button>
-                        <button type="submit" class="btn primary">保存</button>
-                    </div>
-                </form>
-            </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn me-auto" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
         </div>
-    </main>
+    </div>
 </div>
+
+<script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
 <script th:src="@{/js/app.js}"></script>
 <script th:src="@{/js/repos.js}"></script>
 </body>

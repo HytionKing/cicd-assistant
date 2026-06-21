@@ -1,6 +1,7 @@
 (async function () {
   const tbody = document.getElementById('repo-tbody');
-  const modal = document.getElementById('modal');
+  const modalEl = document.getElementById('modal-repo');
+  const modal = new bootstrap.Modal(modalEl);
   const form = document.getElementById('repo-form');
   const title = document.getElementById('modal-title');
 
@@ -8,19 +9,21 @@
     const list = await api.get('/api/repos');
     tbody.innerHTML = list.map(r => `
       <tr>
-        <td>${r.id}</td>
-        <td>${escapeHtml(r.name)}</td>
-        <td>${escapeHtml(r.gitlabHost || '')}</td>
+        <td><span class="text-secondary">#${r.id}</span></td>
+        <td><strong>${escapeHtml(r.name)}</strong></td>
+        <td><span class="text-secondary">${escapeHtml(r.gitlabHost || '')}</span></td>
         <td>${escapeHtml(r.projectPath || '')}</td>
-        <td>${escapeHtml(r.branchPrefix || '')}</td>
-        <td>${escapeHtml(r.authType)}</td>
-        <td>
-          <button class="btn" data-act="edit" data-id="${r.id}">编辑</button>
-          <button class="btn" data-act="test" data-id="${r.id}">测试</button>
-          <button class="btn danger" data-act="del" data-id="${r.id}">删除</button>
+        <td>${r.branchPrefix ? `<code>${escapeHtml(r.branchPrefix)}</code>` : ''}</td>
+        <td><span class="badge bg-secondary-lt">${escapeHtml(r.authType)}</span></td>
+        <td class="text-end">
+          <div class="btn-list justify-content-end">
+            <button class="btn btn-sm" data-act="edit" data-id="${r.id}"><i class="ti ti-edit me-1"></i>编辑</button>
+            <button class="btn btn-sm btn-outline-info" data-act="test" data-id="${r.id}"><i class="ti ti-plug-connected me-1"></i>测试</button>
+            <button class="btn btn-sm btn-outline-danger" data-act="del" data-id="${r.id}"><i class="ti ti-trash me-1"></i>删除</button>
+          </div>
         </td>
       </tr>
-    `).join('');
+    `).join('') || '<tr><td colspan="7" class="text-center text-secondary py-4">还没有仓库，点击右上角"新建仓库"开始</td></tr>';
   }
 
   function openModal(repo) {
@@ -36,13 +39,10 @@
       form.elements.actuatorPath.value = '/actuator/health';
       form.elements.swaggerPaths.value = '/swagger-ui/index.html,/doc.html';
     }
-    modal.classList.remove('hidden');
+    modal.show();
   }
 
-  function closeModal() { modal.classList.add('hidden'); }
-
   document.getElementById('btn-new').onclick = () => openModal(null);
-  document.getElementById('btn-cancel').onclick = closeModal;
 
   form.onsubmit = async (ev) => {
     ev.preventDefault();
@@ -53,7 +53,7 @@
     try {
       if (id) await api.put('/api/repos/' + id, data);
       else await api.post('/api/repos', data);
-      closeModal();
+      modal.hide();
       await load();
     } catch (e) { alert('保存失败: ' + e.message); }
   };
@@ -71,14 +71,17 @@
       await api.del('/api/repos/' + id);
       await load();
     } else if (act === 'test') {
-      btn.disabled = true; btn.textContent = '测试中...';
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>测试中';
       try {
         const r = await api.post('/api/repos/' + id + '/test-connection');
-        alert(r.success ? '连接成功' : '连接失败: ' + r.message);
+        alert(r.success ? ('连接成功：' + r.message) : ('连接失败：' + r.message));
       } catch (e) {
         alert('请求失败: ' + e.message);
       } finally {
-        btn.disabled = false; btn.textContent = '测试';
+        btn.disabled = false;
+        btn.innerHTML = original;
       }
     }
   });

@@ -26,3 +26,17 @@ window.escapeHtml = function (s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 };
+
+// 各种业务状态 → Tabler badge color
+window.STATUS_BADGE = {
+  PENDING:  'bg-blue-lt',
+  CLONING:  'bg-blue-lt',
+  SCANNING: 'bg-blue-lt',
+  BUILDING: 'bg-yellow-lt',
+  STARTING: 'bg-yellow-lt',
+  RUNNING:  'bg-yellow-lt',
+  SUCCESS:  'bg-green-lt',
+  FAILED:   'bg-red-lt',
+  PARTIAL:  'bg-orange-lt',
+  STOPPED:  'bg-secondary-lt'
+};
