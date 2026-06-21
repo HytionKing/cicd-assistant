@@ -214,17 +214,26 @@ public class BuildLaunchService {
         long timeoutMs = appProperties.getTask().getStartupTimeoutSeconds() * 1000L;
         long startedAt = System.currentTimeMillis();
         long deadline = startedAt + timeoutMs;
-        boolean started = false;
         int actualPort = port;
         log.info("[LAUNCH] module={} waiting for startup, timeout={}s", module.getName(),
                 appProperties.getTask().getStartupTimeoutSeconds());
 
+        // 边写边匹配：避免 "Started" 那一行被后续日志推出 readTail 窗口而漏检。
+        java.util.concurrent.atomic.AtomicBoolean startedFlag = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicInteger detectedPort = new java.util.concurrent.atomic.AtomicInteger(port);
         Thread tailThread = new Thread(() -> {
             try {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     fos.write((line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
                     fos.flush();
+                    Matcher mp = portPat.matcher(line);
+                    if (mp.find()) {
+                        try { detectedPort.set(Integer.parseInt(mp.group(1))); } catch (Exception ignore) {}
+                    }
+                    if (!startedFlag.get() && startedPat.matcher(line).find()) {
+                        startedFlag.set(true);
+                    }
                 }
             } catch (IOException ignored) {
             }
@@ -233,6 +242,7 @@ public class BuildLaunchService {
         tailThread.start();
 
         long nextProgressAt = startedAt + 30_000;
+        boolean started = false;
         while (System.currentTimeMillis() < deadline) {
             if (!process.isAlive()) {
                 int exit = safeExit(process);
@@ -242,16 +252,10 @@ public class BuildLaunchService {
                 safeClose(fos);
                 return result;
             }
-            String tail = readTail(logFile, 8192);
-            if (tail != null) {
-                Matcher mp = portPat.matcher(tail);
-                while (mp.find()) {
-                    try { actualPort = Integer.parseInt(mp.group(1)); } catch (Exception ignore) {}
-                }
-                if (startedPat.matcher(tail).find()) {
-                    started = true;
-                    break;
-                }
+            if (startedFlag.get()) {
+                started = true;
+                actualPort = detectedPort.get();
+                break;
             }
             long now = System.currentTimeMillis();
             if (now >= nextProgressAt) {

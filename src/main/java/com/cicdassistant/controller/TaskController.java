@@ -69,7 +69,9 @@ public class TaskController {
             if (path == null) {
                 r.put("content", "(no log)");
             } else {
-                r.put("content", buildLaunchService.readLog(Paths.get(path), 200_000));
+                // 启动期间业务服务日志很大（Nacos / Sentinel / bean 初始化），
+                // 之前 200KB 经常把头部截掉看不到。给 5MB 上限够用又不至于撑爆浏览器。
+                r.put("content", buildLaunchService.readLog(Paths.get(path), 5_000_000));
             }
         } catch (Exception e) {
             r.put("content", "read log failed: " + e.getMessage());
