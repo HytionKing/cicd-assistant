@@ -64,9 +64,18 @@
     try {
       const r = await api.get('/api/tasks/modules/' + reqModuleId + '/log?type=' + reqType);
       if (myToken !== logRequestToken) return;
-      const atBottom = logContent.scrollTop + logContent.clientHeight >= logContent.scrollHeight - 20;
-      logContent.textContent = r.content || '(空)';
-      if (atBottom) logContent.scrollTop = logContent.scrollHeight;
+      const newText = r.content || '(空)';
+      // 内容没变就什么也不做，避免无谓的 reflow + scroll 重置
+      if (logContent.textContent === newText) return;
+      const prevScrollTop = logContent.scrollTop;
+      const wasAtBottom = prevScrollTop + logContent.clientHeight >= logContent.scrollHeight - 20;
+      logContent.textContent = newText;
+      // 用户在底部 → 跟随新内容到底部；否则保留原位置，不被自动刷新拽回顶部
+      if (wasAtBottom) {
+        logContent.scrollTop = logContent.scrollHeight;
+      } else {
+        logContent.scrollTop = prevScrollTop;
+      }
     } catch (e) {
       if (myToken !== logRequestToken) return;
       logContent.textContent = '加载失败: ' + e.message;
