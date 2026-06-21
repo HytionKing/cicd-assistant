@@ -2,36 +2,72 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>代码启动</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>代码启动 - CICD Assistant</title>
+    <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
+    <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
     <link rel="stylesheet" th:href="@{/css/app.css}"/>
 </head>
 <body>
-<div class="app">
+<div class="page">
     <div th:replace="~{layout :: sidebar('launch')}"></div>
-    <main class="content">
-        <header class="page-header">
-            <h2>代码启动</h2>
-        </header>
-
-        <div class="card">
-            <label class="block">选择仓库
-                <select id="sel-repo"></select>
-            </label>
-            <button id="btn-load-branches" class="btn">拉取分支</button>
-
-            <div id="branches-box" class="branches-box"></div>
-
-            <label class="block mt">手动指定模块（逗号分隔，可留空）
-                <input id="inp-modules" placeholder="例如 user-service,order-service"/>
-            </label>
-
-            <div class="actions mt">
-                <button id="btn-start" class="btn primary">开始验证</button>
+    <div class="page-wrapper">
+        <div class="page-header">
+            <div class="container-xl">
+                <h2 class="page-title"><i class="ti ti-rocket me-2"></i>代码启动</h2>
             </div>
-            <div id="msg" class="msg"></div>
         </div>
-    </main>
+
+        <div class="page-body">
+            <div class="container-xl">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">仓库</label>
+                                <select id="sel-repo" class="form-select"></select>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <button id="btn-load-branches" class="btn btn-outline-primary">
+                                    <i class="ti ti-git-branch me-1"></i>拉取分支
+                                </button>
+                                <span id="msg" class="ms-3 text-secondary small"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">分支</label>
+                                <div id="branches-box" class="select-list">
+                                    <span class="text-secondary small">点击"拉取分支"加载</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-1">
+                                    <label class="form-label mb-0">模块</label>
+                                    <span id="modules-actions" class="ms-auto small hidden">
+                                        <a href="#" id="btn-all" class="text-decoration-none">全选</a>
+                                        <span class="text-secondary mx-1">|</span>
+                                        <a href="#" id="btn-none" class="text-decoration-none">全不选</a>
+                                    </span>
+                                </div>
+                                <div id="modules-box" class="select-list">
+                                    <span class="text-secondary small">选择仓库后会自动加载</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-end mt-4">
+                            <button id="btn-start" class="btn btn-primary">
+                                <i class="ti ti-player-play me-1"></i>开始验证
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+<script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
 <script th:src="@{/js/app.js}"></script>
 <script th:src="@{/js/launch.js}"></script>
 </body>

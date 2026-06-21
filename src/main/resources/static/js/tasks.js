@@ -1,22 +1,29 @@
 (async function () {
   const tbody = document.getElementById('task-tbody');
 
+  function statusBadge(s) {
+    const cls = STATUS_BADGE[s] || 'bg-secondary-lt';
+    return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
+  }
+
   async function load() {
     const list = await api.get('/api/tasks');
     tbody.innerHTML = list.map(t => `
       <tr>
-        <td><a href="/tasks/${t.id}">#${t.id}</a></td>
-        <td>${escapeHtml(t.repoName || '')}</td>
-        <td>${escapeHtml(t.branches || '')}</td>
-        <td><span class="status ${t.status}">${t.status}</span></td>
-        <td>${escapeHtml(t.createdAt || '')}</td>
-        <td>${escapeHtml(t.finishedAt || '')}</td>
-        <td>
-          <a class="btn" href="/tasks/${t.id}">查看</a>
-          <button class="btn danger" data-id="${t.id}">删除</button>
+        <td><a href="/tasks/${t.id}" class="text-decoration-none">#${t.id}</a></td>
+        <td><strong>${escapeHtml(t.repoName || '')}</strong></td>
+        <td class="text-secondary"><small>${escapeHtml(t.branches || '')}</small></td>
+        <td>${statusBadge(t.status)}</td>
+        <td><small class="text-secondary">${escapeHtml(t.createdAt || '')}</small></td>
+        <td><small class="text-secondary">${escapeHtml(t.finishedAt || '')}</small></td>
+        <td class="text-end">
+          <div class="btn-list justify-content-end">
+            <a class="btn btn-sm" href="/tasks/${t.id}"><i class="ti ti-eye me-1"></i>查看</a>
+            <button class="btn btn-sm btn-outline-danger" data-id="${t.id}"><i class="ti ti-trash me-1"></i>删除</button>
+          </div>
         </td>
       </tr>
-    `).join('');
+    `).join('') || '<tr><td colspan="7" class="text-center text-secondary py-4">还没有任务，去"代码启动"创建一个吧</td></tr>';
   }
 
   tbody.addEventListener('click', async (ev) => {

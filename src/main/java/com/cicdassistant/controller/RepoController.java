@@ -64,6 +64,28 @@ public class RepoController {
         return r;
     }
 
+    @GetMapping("/{id}/modules")
+    public Map<String, Object> modules(@PathVariable Long id) {
+        Repo repo = repoService.findByIdMasked(id);
+        Map<String, Object> r = new HashMap<>();
+        if (repo == null) {
+            r.put("configured", false);
+            r.put("modules", java.util.Collections.emptyList());
+            return r;
+        }
+        String raw = repo.getModules();
+        java.util.List<String> list = new java.util.ArrayList<>();
+        if (raw != null && !raw.trim().isEmpty()) {
+            for (String s : raw.split(",")) {
+                String t = s.trim();
+                if (!t.isEmpty()) list.add(t);
+            }
+        }
+        r.put("configured", !list.isEmpty());
+        r.put("modules", list);
+        return r;
+    }
+
     @GetMapping("/{id}/branches")
     public Map<String, Object> branches(@PathVariable Long id) {
         Repo repo = repoService.findByIdDecrypted(id);

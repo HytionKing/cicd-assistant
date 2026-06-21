@@ -1,16 +1,58 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
-<aside th:fragment="sidebar(page)" class="sidebar">
-    <h1>CICD 自检</h1>
-    <nav>
-        <a th:href="@{/repos}" th:classappend="${page == 'repos'} ? 'active' : ''">仓库管理</a>
-        <a th:href="@{/launch}" th:classappend="${page == 'launch'} ? 'active' : ''">代码启动</a>
-        <a th:href="@{/tasks}" th:classappend="${page == 'tasks'} ? 'active' : ''">任务列表</a>
-    </nav>
-    <form th:action="@{/logout}" method="post" class="logout">
-        <button type="submit">退出</button>
-    </form>
+<aside th:fragment="sidebar(page)" class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+    <div class="container-fluid">
+        <h1 class="navbar-brand navbar-brand-autodark">
+            <a th:href="@{/repos}" class="d-flex align-items-center text-white text-decoration-none">
+                <i class="ti ti-cpu fs-3 me-2"></i>
+                <span>CICD Assistant</span>
+            </a>
+        </h1>
+        <div class="collapse navbar-collapse" id="navbar-menu">
+            <ul class="navbar-nav pt-lg-3">
+                <li class="nav-item" th:classappend="${page == 'repos'} ? 'active' : ''">
+                    <a class="nav-link" th:href="@{/repos}">
+                        <span class="nav-link-icon"><i class="ti ti-database"></i></span>
+                        <span class="nav-link-title">仓库管理</span>
+                    </a>
+                </li>
+                <li class="nav-item" th:classappend="${page == 'launch'} ? 'active' : ''">
+                    <a class="nav-link" th:href="@{/launch}">
+                        <span class="nav-link-icon"><i class="ti ti-rocket"></i></span>
+                        <span class="nav-link-title">代码启动</span>
+                    </a>
+                </li>
+                <li class="nav-item" th:classappend="${page == 'tasks'} ? 'active' : ''">
+                    <a class="nav-link" th:href="@{/tasks}">
+                        <span class="nav-link-icon"><i class="ti ti-list-check"></i></span>
+                        <span class="nav-link-title">任务列表</span>
+                    </a>
+                </li>
+
+                <!--
+                    需要二级菜单时，按下面模板写：
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button">
+                            <span class="nav-link-icon"><i class="ti ti-settings"></i></span>
+                            <span class="nav-link-title">设置</span>
+                        </a>
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" th:href="@{/xxx}">子项 1</a>
+                            <a class="dropdown-item" th:href="@{/yyy}">子项 2</a>
+                        </div>
+                    </li>
+                -->
+            </ul>
+            <div class="mt-auto pb-3 px-3">
+                <form th:action="@{/logout}" method="post">
+                    <button type="submit" class="btn btn-outline-light w-100">
+                        <i class="ti ti-logout me-1"></i>退出
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 </aside>
 </body>
 </html>

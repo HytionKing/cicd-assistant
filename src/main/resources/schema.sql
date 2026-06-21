@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS repo (
     actuator_path TEXT,
     jvm_args TEXT,
     spring_profile TEXT,
+    modules TEXT,
     created_at TEXT,
     updated_at TEXT
 );
