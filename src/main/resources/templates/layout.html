@@ -29,20 +29,36 @@
                     </a>
                     <div class="collapse" id="submenu-compare"
                          th:classappend="${cmpActive} ? 'show' : ''">
-                        <div class="dropdown-menu">
-                            <a class="dropdown-item" th:href="@{/compare/new}"
-                               th:classappend="${page == 'compare.new'} ? 'active' : ''">
-                                <i class="ti ti-plus me-2"></i>新建检测</a>
-                            <a class="dropdown-item" th:href="@{/compare/tasks}"
-                               th:classappend="${page == 'compare.tasks'} ? 'active' : ''">
-                                <i class="ti ti-list-check me-2"></i>任务列表</a>
-                            <a class="dropdown-item" th:href="@{/compare/contexts}"
-                               th:classappend="${page == 'compare.contexts'} ? 'active' : ''">
-                                <i class="ti ti-book me-2"></i>知识库</a>
-                            <a class="dropdown-item" th:href="@{/compare/webhooks}"
-                               th:classappend="${page == 'compare.webhooks'} ? 'active' : ''">
-                                <i class="ti ti-bell me-2"></i>通知配置</a>
-                        </div>
+                        <ul class="nav nav-pills nav-vertical">
+                            <li class="nav-item">
+                                <a class="nav-link" th:href="@{/compare/new}"
+                                   th:classappend="${page == 'compare.new'} ? 'active' : ''">
+                                    <span class="nav-link-icon"><i class="ti ti-plus"></i></span>
+                                    <span class="nav-link-title">新建检测</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" th:href="@{/compare/tasks}"
+                                   th:classappend="${page == 'compare.tasks'} ? 'active' : ''">
+                                    <span class="nav-link-icon"><i class="ti ti-list-check"></i></span>
+                                    <span class="nav-link-title">任务列表</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" th:href="@{/compare/contexts}"
+                                   th:classappend="${page == 'compare.contexts'} ? 'active' : ''">
+                                    <span class="nav-link-icon"><i class="ti ti-book"></i></span>
+                                    <span class="nav-link-title">知识库</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" th:href="@{/compare/webhooks}"
+                                   th:classappend="${page == 'compare.webhooks'} ? 'active' : ''">
+                                    <span class="nav-link-icon"><i class="ti ti-bell"></i></span>
+                                    <span class="nav-link-title">通知配置</span>
+                                </a>
+                            </li>
+                        </ul>
                     </div>
                 </li>
                 </th:block>
@@ -58,14 +74,22 @@
                     </a>
                     <div class="collapse" id="submenu-launch"
                          th:classappend="${lnActive} ? 'show' : ''">
-                        <div class="dropdown-menu">
-                            <a class="dropdown-item" th:href="@{/launch}"
-                               th:classappend="${page == 'launch.new'} ? 'active' : ''">
-                                <i class="ti ti-player-play me-2"></i>新建启动</a>
-                            <a class="dropdown-item" th:href="@{/launch/tasks}"
-                               th:classappend="${page == 'launch.tasks'} ? 'active' : ''">
-                                <i class="ti ti-list-check me-2"></i>任务列表</a>
-                        </div>
+                        <ul class="nav nav-pills nav-vertical">
+                            <li class="nav-item">
+                                <a class="nav-link" th:href="@{/launch}"
+                                   th:classappend="${page == 'launch.new'} ? 'active' : ''">
+                                    <span class="nav-link-icon"><i class="ti ti-player-play"></i></span>
+                                    <span class="nav-link-title">新建启动</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" th:href="@{/launch/tasks}"
+                                   th:classappend="${page == 'launch.tasks'} ? 'active' : ''">
+                                    <span class="nav-link-icon"><i class="ti ti-list-check"></i></span>
+                                    <span class="nav-link-title">任务列表</span>
+                                </a>
+                            </li>
+                        </ul>
                     </div>
                 </li>
                 </th:block>
