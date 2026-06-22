@@ -21,6 +21,32 @@ public class AppProperties {
     private Task task = new Task();
     private HealthCheck healthCheck = new HealthCheck();
     private GitLab gitlab = new GitLab();
+    private Compare compare = new Compare();
+
+    @Data
+    public static class Compare {
+        private String workspaceRoot = "./workspace-compare";
+        private int mrFetchDefaultLimit = 20;
+        private int asyncPoolSize = 2;
+        private Llm llm = new Llm();
+        private Notify notify = new Notify();
+    }
+
+    @Data
+    public static class Llm {
+        private boolean enabled = false;
+        private String baseUrl = "";
+        private String apiKey = "";
+        private String model = "qwen2.5-coder-32b-instruct";
+        private int timeoutSeconds = 120;
+        private int maxTokens = 4096;
+    }
+
+    @Data
+    public static class Notify {
+        private boolean dingtalkEnabled = true;
+        private int messageMaxChars = 4500;
+    }
 
     @Data
     public static class Paths {

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cicdassistant.mapper.NotificationWebhookMapper">
+
+    <resultMap id="R" type="com.cicdassistant.entity.NotificationWebhook">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="url" column="url"/>
+        <result property="enabled" column="enabled"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="R">
+        SELECT * FROM notification_webhook ORDER BY id DESC
+    </select>
+
+    <select id="findById" resultMap="R">
+        SELECT * FROM notification_webhook WHERE id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.cicdassistant.entity.NotificationWebhook" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO notification_webhook (name, url, enabled, created_at, updated_at)
+        VALUES (#{name}, #{url}, #{enabled}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update" parameterType="com.cicdassistant.entity.NotificationWebhook">
+        UPDATE notification_webhook SET
+            name = #{name},
+            url = #{url},
+            enabled = #{enabled},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM notification_webhook WHERE id = #{id}
+    </delete>
+</mapper>

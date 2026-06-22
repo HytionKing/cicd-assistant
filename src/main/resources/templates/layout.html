@@ -17,32 +17,46 @@
                         <span class="nav-link-title">仓库管理</span>
                     </a>
                 </li>
-                <li class="nav-item" th:classappend="${page == 'launch'} ? 'active' : ''">
-                    <a class="nav-link" th:href="@{/launch}">
+
+                <li class="nav-item dropdown"
+                    th:classappend="${page != null and #strings.startsWith(page, 'compare.')} ? 'active' : ''">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown"
+                       data-bs-auto-close="false" href="#" role="button" aria-expanded="false">
+                        <span class="nav-link-icon"><i class="ti ti-git-compare"></i></span>
+                        <span class="nav-link-title">合并检测</span>
+                    </a>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" th:href="@{/compare/new}"
+                           th:classappend="${page == 'compare.new'} ? 'active' : ''">
+                            <i class="ti ti-plus me-2"></i>新建检测</a>
+                        <a class="dropdown-item" th:href="@{/compare/tasks}"
+                           th:classappend="${page == 'compare.tasks'} ? 'active' : ''">
+                            <i class="ti ti-list-check me-2"></i>任务列表</a>
+                        <a class="dropdown-item" th:href="@{/compare/contexts}"
+                           th:classappend="${page == 'compare.contexts'} ? 'active' : ''">
+                            <i class="ti ti-book me-2"></i>知识库</a>
+                        <a class="dropdown-item" th:href="@{/compare/webhooks}"
+                           th:classappend="${page == 'compare.webhooks'} ? 'active' : ''">
+                            <i class="ti ti-bell me-2"></i>通知配置</a>
+                    </div>
+                </li>
+
+                <li class="nav-item dropdown"
+                    th:classappend="${page != null and #strings.startsWith(page, 'launch.')} ? 'active' : ''">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown"
+                       data-bs-auto-close="false" href="#" role="button" aria-expanded="false">
                         <span class="nav-link-icon"><i class="ti ti-rocket"></i></span>
                         <span class="nav-link-title">代码启动</span>
                     </a>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" th:href="@{/launch}"
+                           th:classappend="${page == 'launch.new'} ? 'active' : ''">
+                            <i class="ti ti-player-play me-2"></i>新建启动</a>
+                        <a class="dropdown-item" th:href="@{/launch/tasks}"
+                           th:classappend="${page == 'launch.tasks'} ? 'active' : ''">
+                            <i class="ti ti-list-check me-2"></i>任务列表</a>
+                    </div>
                 </li>
-                <li class="nav-item" th:classappend="${page == 'tasks'} ? 'active' : ''">
-                    <a class="nav-link" th:href="@{/tasks}">
-                        <span class="nav-link-icon"><i class="ti ti-list-check"></i></span>
-                        <span class="nav-link-title">任务列表</span>
-                    </a>
-                </li>
-
-                <!--
-                    需要二级菜单时，按下面模板写：
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button">
-                            <span class="nav-link-icon"><i class="ti ti-settings"></i></span>
-                            <span class="nav-link-title">设置</span>
-                        </a>
-                        <div class="dropdown-menu">
-                            <a class="dropdown-item" th:href="@{/xxx}">子项 1</a>
-                            <a class="dropdown-item" th:href="@{/yyy}">子项 2</a>
-                        </div>
-                    </li>
-                -->
             </ul>
             <div class="mt-auto pb-3 px-3">
                 <form th:action="@{/logout}" method="post">
