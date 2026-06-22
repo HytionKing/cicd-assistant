@@ -73,13 +73,18 @@ public class CompareService {
         Repo repo = repoService.findByIdMasked(req.getRepoId());
         if (repo == null) throw new IllegalArgumentException("仓库不存在: " + req.getRepoId());
 
+        String mode = normalizeMode(req.getMode());
+        if (("LLM".equals(mode) || "HYBRID".equals(mode)) && !llmConfigured()) {
+            throw new IllegalArgumentException("LLM 未配置：请在 application.yml 中开启 app.compare.llm.enabled 并填好 base-url");
+        }
+
         CompareTask t = new CompareTask();
         t.setRepoId(req.getRepoId());
         t.setRepoName(repo.getName());
         t.setBaselineBranch(req.getBaselineBranch().trim());
         t.setTargetBranches(String.join(",", req.getTargetBranches()));
         t.setMrSelections(toMrSelectionsJson(req.getMrs()));
-        t.setMode(normalizeMode(req.getMode()));
+        t.setMode(mode);
         t.setContextIds(req.getContextIds() == null ? "" :
                 req.getContextIds().stream().map(String::valueOf).reduce((a, b) -> a + "," + b).orElse(""));
         t.setWebhookId(req.getWebhookId());
@@ -205,6 +210,11 @@ public class CompareService {
         String u = m.toUpperCase();
         if ("RULE".equals(u) || "LLM".equals(u) || "HYBRID".equals(u)) return u;
         return "RULE";
+    }
+
+    private boolean llmConfigured() {
+        AppProperties.Llm llm = appProperties.getCompare().getLlm();
+        return llm.isEnabled() && llm.getBaseUrl() != null && !llm.getBaseUrl().trim().isEmpty();
     }
 
     private String toMrSelectionsJson(List<MrSelection> mrs) {

@@ -71,9 +71,17 @@ app.compare:
     message-max-chars: 4500
 ```
 
-## P3 任务（接下来要做）
+## P3 任务（✅ 已完成）
 
 **目标**：把 `LLM` / `HYBRID` 两种比对模式实现起来，让 finding 带 `LLM` 检测来源徽章。
+
+落地情况：
+- `service/compare/LlmClient.java` — JDK `HttpURLConnection` 走 OpenAI 兼容 `/v1/chat/completions`，强制 `response_format=json_object`，调用/解析失败都降级成一条 `detector=LLM type=LLM_CALL_FAILED|LLM_PARSE_FAILED WARN` finding，把原始响应塞 `llmComment`。
+- `service/compare/LlmPromptBuilder.java` — system prompt 注入"全局上下文 + 仓库相关上下文"两段；user prompt 含 baseline/target 双版本源码（各 6000 字符截断）。HYBRID 复用同一份 system，user 末尾追加规则引擎的 ERROR/WARN 列表让模型复核。
+- `CompareEngine.runOneTarget` 按 mode 分支：RULE 不变；LLM 跳过 differ；HYBRID 先跑 RULE，对每条 ERROR/WARN 调一次 LLM 复核，结论 append 成新 finding（detector=LLM），原 RULE finding 保留。
+- `CompareService.create` 增加守卫：mode∈{LLM,HYBRID} 且 `app.compare.llm.enabled=false` 或 `base-url` 为空 → 抛 IllegalArgumentException。
+- `controller/ApiExceptionHandler.java` — `@RestControllerAdvice` 把 `IllegalArgumentException` 映射成 400 + `{error,message}`，前端能拿到具体原因。
+- `static/js/app.js` 的 `api.*` 出错时尝试读 JSON body 的 message 字段，否则退回 "HTTP <code>"。
 
 ### P3.1 新增 `LlmClient`（`service/compare/`）
 
@@ -175,9 +183,9 @@ java -cp /tmp:target/classes:$(find ~/.m2 -name 'javaparser-core*.jar' -o -name 
 
 ## 当前状态
 
-- P1+P2 已完成、push、用户验收通过
+- P1+P2+P3 已完成
 - 侧栏 2 级 collapse 已修好（之前用 dropdown-menu 嵌套 + 双 BS 监听都踩过）
-- 准备开 P3 时用户提议迁移新会话
+- P3 完成后下一步是 P4（钉钉真实推送）
 
 ## 给新 agent 的工作守则
 

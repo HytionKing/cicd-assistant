@@ -1,22 +1,37 @@
+// 尝试从错误响应里提取后端返回的 message 字段，否则退回到 "HTTP <code>"。
+async function _err(r) {
+  try {
+    const ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('application/json') >= 0) {
+      const j = await r.json();
+      if (j && j.message) return new Error(j.message);
+    } else {
+      const t = await r.text();
+      if (t) return new Error(t.length > 200 ? t.slice(0, 200) : t);
+    }
+  } catch (_) { /* ignore */ }
+  return new Error('HTTP ' + r.status);
+}
+
 window.api = {
   async get(url) {
     const r = await fetch(url);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw await _err(r);
     return r.json();
   },
   async post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : null });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw await _err(r);
     return r.status === 204 ? null : r.json();
   },
   async put(url, body) {
     const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw await _err(r);
     return r.json();
   },
   async del(url) {
     const r = await fetch(url, { method: 'DELETE' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw await _err(r);
   }
 };
 
