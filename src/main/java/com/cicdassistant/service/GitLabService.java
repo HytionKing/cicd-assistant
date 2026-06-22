@@ -5,7 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.gitlab4j.api.GitLabApi;
 import org.gitlab4j.api.GitLabApiException;
+import org.gitlab4j.api.Constants;
 import org.gitlab4j.api.models.Branch;
+import org.gitlab4j.api.models.MergeRequest;
+import org.gitlab4j.api.models.MergeRequestFilter;
 import org.gitlab4j.api.models.Version;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +32,39 @@ public class GitLabService {
                     .filter(n -> StringUtils.isBlank(prefix) || n.startsWith(prefix))
                     .sorted()
                     .collect(Collectors.toList());
+        }
+    }
+
+    /**
+     * 拉取某个目标分支最近 N 条已合并 MR。
+     * 用于"合并检测"页面 MR 自动补全：用户选完被对比分支后调一次。
+     */
+    public List<MergeRequest> listRecentMergedMrs(Repo repo, String targetBranch, int limit) throws GitLabApiException {
+        if (StringUtils.isBlank(repo.getGitlabHost()) || StringUtils.isBlank(repo.getProjectPath())
+                || StringUtils.isBlank(targetBranch)) {
+            return new ArrayList<>();
+        }
+        try (GitLabApi api = buildApi(repo)) {
+            Object projectId = api.getProjectApi().getProject(normalizeProjectPath(repo.getProjectPath())).getId();
+            MergeRequestFilter f = new MergeRequestFilter()
+                    .withState(Constants.MergeRequestState.MERGED)
+                    .withTargetBranch(targetBranch)
+                    .withOrderBy(Constants.MergeRequestOrderBy.UPDATED_AT)
+                    .withSort(Constants.SortOrder.DESC);
+            // gitlab4j-api 4.19 的 projectId 字段是 Integer，先尝试 setter
+            setProjectIdReflective(f, projectId);
+            return api.getMergeRequestApi().getMergeRequests(f, 1, Math.max(1, Math.min(limit, 100)));
+        }
+    }
+
+    private void setProjectIdReflective(MergeRequestFilter f, Object id) {
+        try {
+            java.lang.reflect.Method m;
+            try { m = f.getClass().getMethod("withProjectId", Integer.class); }
+            catch (NoSuchMethodException e) { m = f.getClass().getMethod("withProjectId", Long.class); }
+            m.invoke(f, id);
+        } catch (Throwable t) {
+            log.warn("set MergeRequestFilter projectId failed: {}", t.getMessage());
         }
     }
 

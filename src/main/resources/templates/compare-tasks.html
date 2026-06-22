@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>任务列表 - CICD Assistant</title>
+    <title>检测任务列表 - CICD Assistant</title>
     <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
     <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
     <link rel="stylesheet" th:href="@{/css/app.css}"/>
 </head>
 <body>
 <div class="page">
-    <div th:replace="~{layout :: sidebar('launch.tasks')}"></div>
+    <div th:replace="~{layout :: sidebar('compare.tasks')}"></div>
     <div class="page-wrapper">
         <div class="page-header">
             <div class="container-fluid">
-                <h2 class="page-title"><i class="ti ti-list-check me-2"></i>任务列表</h2>
+                <h2 class="page-title"><i class="ti ti-list-check me-2"></i>检测任务列表</h2>
             </div>
         </div>
         <div class="page-body">
@@ -24,14 +24,15 @@
                         <table class="table table-vcenter card-table">
                             <thead>
                             <tr>
-                                <th>ID</th><th>仓库</th><th>分支</th><th>状态</th>
-                                <th>创建时间</th><th>完成时间</th><th class="text-end">操作</th>
+                                <th>ID</th><th>仓库</th><th>基准 → 被对比</th><th>模式</th>
+                                <th>状态</th><th>进度</th><th>创建时间</th><th>完成时间</th>
+                                <th class="text-end">操作</th>
                             </tr>
                             </thead>
-                            <tbody id="task-tbody"></tbody>
+                            <tbody id="ct-tbody"></tbody>
                         </table>
                     </div>
-                    <div class="card-footer" id="task-pager"></div>
+                    <div class="card-footer" id="ct-pager"></div>
                 </div>
             </div>
         </div>
@@ -40,6 +41,6 @@
 <script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
 <script th:src="@{/js/app.js}"></script>
 <script th:src="@{/js/ui.js}"></script>
-<script th:src="@{/js/tasks.js}"></script>
+<script th:src="@{/js/compare-tasks.js}"></script>
 </body>
 </html>

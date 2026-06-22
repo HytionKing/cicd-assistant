@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>新建检测 - CICD Assistant</title>
+    <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
+    <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body>
+<div class="page">
+    <div th:replace="~{layout :: sidebar('compare.new')}"></div>
+    <div class="page-wrapper">
+        <div class="page-header">
+            <div class="container-fluid">
+                <h2 class="page-title"><i class="ti ti-git-compare me-2"></i>新建检测</h2>
+            </div>
+        </div>
+
+        <div class="page-body">
+            <div class="container-fluid">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">仓库</label>
+                                <select id="sel-repo" class="form-select"></select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">基准分支</label>
+                                <div class="d-flex gap-2">
+                                    <input id="inp-baseline" class="form-control" placeholder="如 develop / fat / uat"/>
+                                    <button id="btn-pick-baseline" class="btn btn-outline-secondary" type="button" title="从分支列表选">
+                                        <i class="ti ti-list"></i>
+                                    </button>
+                                </div>
+                                <small class="form-hint">支持手动输入或下拉选择，单选</small>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="d-flex align-items-center mb-1">
+                                    <label class="form-label mb-0">被对比分支（多选）</label>
+                                    <button id="btn-load-targets" class="btn btn-sm btn-outline-primary ms-3" type="button">
+                                        <i class="ti ti-refresh me-1"></i>拉取分支
+                                    </button>
+                                    <span id="targets-msg" class="ms-3 text-secondary small"></span>
+                                </div>
+                                <div id="targets-box" class="select-list">
+                                    <span class="text-secondary small">点击"拉取分支"加载（默认勾选 env-* 前缀）</span>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="d-flex align-items-center mb-1">
+                                    <label class="form-label mb-0">MR 列表（按被对比分支分组）</label>
+                                    <button id="btn-load-mrs" class="btn btn-sm btn-outline-primary ms-3" type="button">
+                                        <i class="ti ti-search me-1"></i>查询 MR
+                                    </button>
+                                    <span id="mrs-msg" class="ms-3 text-secondary small"></span>
+                                </div>
+                                <div id="mrs-box" class="select-list">
+                                    <span class="text-secondary small">选完被对比分支后点击"查询 MR"</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">比对模式</label>
+                                <select id="sel-mode" class="form-select">
+                                    <option value="RULE">规则（快，按 Java/XML/SQL 语义）</option>
+                                    <option value="LLM">AI（直接交给本地大模型）</option>
+                                    <option value="HYBRID" selected>规则 + AI 复核（推荐）</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">钉钉通知</label>
+                                <select id="sel-webhook" class="form-select">
+                                    <option value="">不推送</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4 d-none" id="contexts-wrap">
+                                <label class="form-label">LLM 知识库</label>
+                                <select id="sel-contexts" class="form-select" multiple></select>
+                                <small class="form-hint">按 Ctrl/Cmd 多选；留空则不附加上下文</small>
+                            </div>
+                        </div>
+
+                        <div class="text-end mt-4">
+                            <button id="btn-start" class="btn btn-primary">
+                                <i class="ti ti-player-play me-1"></i>开始检测
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 基准分支选择弹窗 -->
+<div class="modal fade" id="modal-pick-baseline" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">选择基准分支</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="baseline-list" class="select-list" style="max-height: 360px;">
+                    <span class="text-secondary small">加载中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
+<script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/ui.js}"></script>
+<script th:src="@{/js/compare-new.js}"></script>
+</body>
+</html>

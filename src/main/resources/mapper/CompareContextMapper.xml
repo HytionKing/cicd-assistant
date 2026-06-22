@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cicdassistant.mapper.CompareContextMapper">
+
+    <resultMap id="R" type="com.cicdassistant.entity.CompareContext">
+        <id property="id" column="id"/>
+        <result property="repoId" column="repo_id"/>
+        <result property="title" column="title"/>
+        <result property="content" column="content"/>
+        <result property="enabled" column="enabled"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="R">
+        SELECT * FROM compare_context ORDER BY id DESC
+    </select>
+
+    <select id="findApplicable" resultMap="R">
+        SELECT * FROM compare_context
+        WHERE enabled = 1 AND (repo_id IS NULL OR repo_id = #{repoId})
+        ORDER BY repo_id NULLS FIRST, id ASC
+    </select>
+
+    <select id="findById" resultMap="R">
+        SELECT * FROM compare_context WHERE id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.cicdassistant.entity.CompareContext" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO compare_context (repo_id, title, content, enabled, created_at, updated_at)
+        VALUES (#{repoId}, #{title}, #{content}, #{enabled}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update" parameterType="com.cicdassistant.entity.CompareContext">
+        UPDATE compare_context SET
+            repo_id = #{repoId},
+            title = #{title},
+            content = #{content},
+            enabled = #{enabled},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM compare_context WHERE id = #{id}
+    </delete>
+</mapper>

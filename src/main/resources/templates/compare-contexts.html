@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>知识库 - CICD Assistant</title>
+    <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
+    <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body>
+<div class="page">
+    <div th:replace="~{layout :: sidebar('compare.contexts')}"></div>
+    <div class="page-wrapper">
+        <div class="page-header">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col"><h2 class="page-title"><i class="ti ti-book me-2"></i>知识库</h2></div>
+                    <div class="col-auto">
+                        <button id="btn-new" class="btn btn-primary"><i class="ti ti-plus me-1"></i>新建条目</button>
+                    </div>
+                </div>
+                <p class="text-secondary mt-2 mb-0 small">业务场景描述、历史踩坑案例等。LLM 比对时会作为上下文附在 prompt 里，提升判断准确度。</p>
+            </div>
+        </div>
+        <div class="page-body">
+            <div class="container-fluid">
+                <div class="card">
+                    <div class="table-responsive">
+                        <table class="table table-vcenter card-table">
+                            <thead><tr>
+                                <th>ID</th><th>标题</th><th>作用范围</th><th>启用</th>
+                                <th>更新时间</th><th class="text-end">操作</th>
+                            </tr></thead>
+                            <tbody id="ctx-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-ctx" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ctx-modal-title">新建条目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="ctx-form">
+                <input type="hidden" name="id"/>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">标题</label>
+                            <input class="form-control" name="title" required/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">作用仓库</label>
+                            <select class="form-select" name="repoId"><option value="">全局（所有仓库）</option></select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">内容</label>
+                            <textarea class="form-control" name="content" rows="8" required
+                                      placeholder="举例：&#10;1. 订单服务的金额字段不能 null，相关 SQL 改动需特别关注。&#10;2. 上次 release 误删了 user_status 列，导致 XX 报错，类似改动要警示。"></textarea>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-check form-switch mt-4 pt-2">
+                                <input type="checkbox" class="form-check-input" name="enabled" checked/>
+                                <span class="form-check-label">启用</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn me-auto" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
+<script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/ui.js}"></script>
+<script th:src="@{/js/compare-contexts.js}"></script>
+</body>
+</html>

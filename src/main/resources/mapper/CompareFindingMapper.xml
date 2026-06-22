@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cicdassistant.mapper.CompareFindingMapper">
+
+    <resultMap id="R" type="com.cicdassistant.entity.CompareFinding">
+        <id property="id" column="id"/>
+        <result property="targetId" column="target_id"/>
+        <result property="mrIid" column="mr_iid"/>
+        <result property="filePath" column="file_path"/>
+        <result property="detector" column="detector"/>
+        <result property="type" column="type"/>
+        <result property="severity" column="severity"/>
+        <result property="summary" column="summary"/>
+        <result property="baselineSnippet" column="baseline_snippet"/>
+        <result property="targetSnippet" column="target_snippet"/>
+        <result property="llmComment" column="llm_comment"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findByTargetId" resultMap="R">
+        SELECT * FROM compare_finding
+        WHERE target_id = #{targetId}
+        ORDER BY
+          CASE severity WHEN 'ERROR' THEN 0 WHEN 'WARN' THEN 1 ELSE 2 END,
+          file_path ASC,
+          id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.cicdassistant.entity.CompareFinding" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO compare_finding (
+            target_id, mr_iid, file_path, detector, type, severity,
+            summary, baseline_snippet, target_snippet, llm_comment, created_at
+        ) VALUES (
+            #{targetId}, #{mrIid}, #{filePath}, #{detector}, #{type}, #{severity},
+            #{summary}, #{baselineSnippet}, #{targetSnippet}, #{llmComment}, #{createdAt}
+        )
+    </insert>
+
+    <delete id="deleteByTargetId">
+        DELETE FROM compare_finding WHERE target_id = #{targetId}
+    </delete>
+</mapper>

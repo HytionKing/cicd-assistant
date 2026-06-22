@@ -94,3 +94,19 @@ app:
     port-pattern: "(?:Tomcat|Undertow|Jetty|Netty|WebServer)\\s+started\\s+on\\s+port(?:\\(s\\))?[:\\s]+(\\d+)"
   gitlab:
     default-branch-prefix: ""
+
+  # 合并检测（merge verification）相关配置
+  compare:
+    workspace-root: ./workspace-compare
+    mr-fetch-default-limit: 20
+    async-pool-size: 2
+    llm:
+      enabled: false
+      base-url: ""                       # OpenAI 兼容协议，例如 http://10.x.x.x:8000
+      api-key: ""
+      model: "qwen2.5-coder-32b-instruct"
+      timeout-seconds: 120
+      max-tokens: 4096
+    notify:
+      dingtalk-enabled: true
+      message-max-chars: 4500

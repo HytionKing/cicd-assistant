@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>检测任务详情 - CICD Assistant</title>
+    <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
+    <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body>
+<div class="page">
+    <div th:replace="~{layout :: sidebar('compare.tasks')}"></div>
+    <div class="page-wrapper">
+        <div class="page-header">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h2 class="page-title">
+                            <i class="ti ti-clipboard-list me-2"></i>检测任务 #<span id="task-id" th:text="${taskId}"></span>
+                        </h2>
+                    </div>
+                    <div class="col-auto">
+                        <div class="btn-list">
+                            <button id="btn-refresh" class="btn"><i class="ti ti-refresh me-1"></i>刷新</button>
+                            <a th:href="@{/compare/tasks}" class="btn"><i class="ti ti-arrow-left me-1"></i>返回</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-body">
+            <div class="container-fluid">
+                <div class="card mb-3">
+                    <div class="card-body" id="task-summary"></div>
+                </div>
+                <div id="targets-cards"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Finding 详情弹窗 -->
+<div class="modal fade" id="finding-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="finding-title">差异详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="finding-body"></div>
+            <div class="modal-footer">
+                <button class="btn" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
+<script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/ui.js}"></script>
+<script th:src="@{/js/compare-task-detail.js}"></script>
+</body>
+</html>
