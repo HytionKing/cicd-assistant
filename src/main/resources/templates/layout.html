@@ -18,45 +18,57 @@
                     </a>
                 </li>
 
-                <li class="nav-item dropdown"
-                    th:classappend="${page != null and #strings.startsWith(page, 'compare.')} ? 'active' : ''">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown"
-                       data-bs-auto-close="false" href="#" role="button" aria-expanded="false">
+                <th:block th:with="cmpActive=${page != null and #strings.startsWith(page, 'compare.')}">
+                <li class="nav-item" th:classappend="${cmpActive} ? 'active' : ''">
+                    <a class="nav-link"
+                       th:classappend="${cmpActive} ? '' : 'collapsed'"
+                       data-bs-toggle="collapse" href="#submenu-compare" role="button"
+                       th:attr="aria-expanded=${cmpActive} ? 'true' : 'false'">
                         <span class="nav-link-icon"><i class="ti ti-git-compare"></i></span>
                         <span class="nav-link-title">合并检测</span>
                     </a>
-                    <div class="dropdown-menu">
-                        <a class="dropdown-item" th:href="@{/compare/new}"
-                           th:classappend="${page == 'compare.new'} ? 'active' : ''">
-                            <i class="ti ti-plus me-2"></i>新建检测</a>
-                        <a class="dropdown-item" th:href="@{/compare/tasks}"
-                           th:classappend="${page == 'compare.tasks'} ? 'active' : ''">
-                            <i class="ti ti-list-check me-2"></i>任务列表</a>
-                        <a class="dropdown-item" th:href="@{/compare/contexts}"
-                           th:classappend="${page == 'compare.contexts'} ? 'active' : ''">
-                            <i class="ti ti-book me-2"></i>知识库</a>
-                        <a class="dropdown-item" th:href="@{/compare/webhooks}"
-                           th:classappend="${page == 'compare.webhooks'} ? 'active' : ''">
-                            <i class="ti ti-bell me-2"></i>通知配置</a>
+                    <div class="collapse" id="submenu-compare"
+                         th:classappend="${cmpActive} ? 'show' : ''">
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" th:href="@{/compare/new}"
+                               th:classappend="${page == 'compare.new'} ? 'active' : ''">
+                                <i class="ti ti-plus me-2"></i>新建检测</a>
+                            <a class="dropdown-item" th:href="@{/compare/tasks}"
+                               th:classappend="${page == 'compare.tasks'} ? 'active' : ''">
+                                <i class="ti ti-list-check me-2"></i>任务列表</a>
+                            <a class="dropdown-item" th:href="@{/compare/contexts}"
+                               th:classappend="${page == 'compare.contexts'} ? 'active' : ''">
+                                <i class="ti ti-book me-2"></i>知识库</a>
+                            <a class="dropdown-item" th:href="@{/compare/webhooks}"
+                               th:classappend="${page == 'compare.webhooks'} ? 'active' : ''">
+                                <i class="ti ti-bell me-2"></i>通知配置</a>
+                        </div>
                     </div>
                 </li>
+                </th:block>
 
-                <li class="nav-item dropdown"
-                    th:classappend="${page != null and #strings.startsWith(page, 'launch.')} ? 'active' : ''">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown"
-                       data-bs-auto-close="false" href="#" role="button" aria-expanded="false">
+                <th:block th:with="lnActive=${page != null and #strings.startsWith(page, 'launch.')}">
+                <li class="nav-item" th:classappend="${lnActive} ? 'active' : ''">
+                    <a class="nav-link"
+                       th:classappend="${lnActive} ? '' : 'collapsed'"
+                       data-bs-toggle="collapse" href="#submenu-launch" role="button"
+                       th:attr="aria-expanded=${lnActive} ? 'true' : 'false'">
                         <span class="nav-link-icon"><i class="ti ti-rocket"></i></span>
                         <span class="nav-link-title">代码启动</span>
                     </a>
-                    <div class="dropdown-menu">
-                        <a class="dropdown-item" th:href="@{/launch}"
-                           th:classappend="${page == 'launch.new'} ? 'active' : ''">
-                            <i class="ti ti-player-play me-2"></i>新建启动</a>
-                        <a class="dropdown-item" th:href="@{/launch/tasks}"
-                           th:classappend="${page == 'launch.tasks'} ? 'active' : ''">
-                            <i class="ti ti-list-check me-2"></i>任务列表</a>
+                    <div class="collapse" id="submenu-launch"
+                         th:classappend="${lnActive} ? 'show' : ''">
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" th:href="@{/launch}"
+                               th:classappend="${page == 'launch.new'} ? 'active' : ''">
+                                <i class="ti ti-player-play me-2"></i>新建启动</a>
+                            <a class="dropdown-item" th:href="@{/launch/tasks}"
+                               th:classappend="${page == 'launch.tasks'} ? 'active' : ''">
+                                <i class="ti ti-list-check me-2"></i>任务列表</a>
+                        </div>
                     </div>
                 </li>
+                </th:block>
             </ul>
             <div class="mt-auto pb-3 px-3">
                 <form th:action="@{/logout}" method="post">

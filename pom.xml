@@ -69,6 +69,20 @@
             <version>4.19.0</version>
         </dependency>
 
+        <!-- Java AST 解析（用于 Java 文件方法/字段级语义比对） -->
+        <dependency>
+            <groupId>com.github.javaparser</groupId>
+            <artifactId>javaparser-core</artifactId>
+            <version>3.25.10</version>
+        </dependency>
+
+        <!-- SQL 解析（用于 .sql 脚本按 statement 拆分比对） -->
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>4.6</version>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
