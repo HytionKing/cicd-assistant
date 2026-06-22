@@ -11,3 +11,4 @@ build-logs/
 .vscode/
 .DS_Store
 HELP.md
+workspace-compare/
