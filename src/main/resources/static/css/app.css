@@ -31,6 +31,141 @@
     margin: 0;
 }
 
+/* 深底选区颜色：默认浏览器选区在黑底上看不出来。给 log-box 和 diff 块加亮蓝高亮。 */
+.log-box ::selection,
+.log-box::selection,
+.diff-box ::selection,
+.diff-box::selection {
+    background: #3a6cb3;
+    color: #ffffff;
+}
+
+/* ---- 检测详情：finding 表格 + diff 视图 ---- */
+
+/* finding 列表的外层表格按文件聚合，文件路径列要能截断 */
+.findings-file-table {
+    table-layout: fixed;
+    width: 100%;
+}
+.findings-file-table td,
+.findings-file-table th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.findings-file-table .col-path { width: 55%; }
+.findings-file-table .col-badges { width: 30%; white-space: normal; }
+.findings-file-table .col-actions { width: 15%; text-align: right; white-space: nowrap; }
+.findings-file-table .col-path code {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+}
+
+/* 内层每条 finding 的表格 */
+.findings-inner-table {
+    table-layout: fixed;
+    width: 100%;
+    margin-bottom: 0;
+}
+.findings-inner-table .col-sev { width: 90px; }
+.findings-inner-table .col-src { width: 70px; }
+.findings-inner-table .col-type { width: 180px; }
+.findings-inner-table .col-summary { width: auto; }
+.findings-inner-table .col-mr { width: 70px; }
+.findings-inner-table .col-act { width: 80px; text-align: right; }
+.findings-inner-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.findings-inner-table td.col-summary {
+    white-space: normal;        /* 摘要允许折行，但限制最大行数 */
+    word-break: break-word;
+    max-width: 0;               /* 配合 table-layout: fixed 让 width:auto 真的按可用宽度走 */
+}
+
+/* finding 详情弹窗里的代码片段：放大字号，标题更显眼 */
+.finding-modal-section-title {
+    font-weight: 600;
+    margin: 1rem 0 .35rem;
+    font-size: .95rem;
+    color: var(--tblr-body-color);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.finding-modal-section-title .badge {
+    font-weight: 500;
+}
+
+.diff-box {
+    background: #1e1e1e;
+    color: #e8e8e8;
+    border-radius: var(--tblr-border-radius);
+    padding: 0;
+    max-height: 55vh;
+    overflow: auto;
+    font-size: 13px;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    margin: 0;
+    line-height: 1.55;
+}
+.diff-box .diff-line {
+    display: flex;
+    padding: 0 8px;
+    white-space: pre;
+}
+.diff-box .diff-ln {
+    flex: 0 0 auto;
+    min-width: 3.5em;
+    text-align: right;
+    padding-right: 8px;
+    color: #707070;
+    user-select: none;
+    border-right: 1px solid #333;
+    margin-right: 8px;
+}
+.diff-box .diff-text {
+    flex: 1 1 auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.diff-box .diff-line.add { background: rgba(57, 138, 63, 0.32); }
+.diff-box .diff-line.del { background: rgba(196, 64, 64, 0.32); }
+.diff-box .diff-line.eq  { background: transparent; }
+.diff-box .diff-marker {
+    flex: 0 0 auto;
+    width: 1em;
+    color: #c9c9c9;
+    user-select: none;
+}
+.diff-box .diff-line.add .diff-marker { color: #6ce46c; }
+.diff-box .diff-line.del .diff-marker { color: #ff6e6e; }
+
+/* 单片段视图（baseline 缺失或 target 缺失场景）保留普通 log-box 风格但字号放大 */
+.snippet-box {
+    background: #1e1e1e;
+    color: #e8e8e8;
+    border-radius: var(--tblr-border-radius);
+    padding: 12px;
+    max-height: 55vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 13px;
+    line-height: 1.55;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    margin: 0;
+}
+.snippet-box ::selection,
+.snippet-box::selection {
+    background: #3a6cb3;
+    color: #ffffff;
+}
+
 /* 全局 toast 容器：顶部水平居中浮层 */
 .toast-host {
     position: fixed;
