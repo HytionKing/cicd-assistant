@@ -118,6 +118,34 @@
   }
 
   // ---- finding 表格：按文件聚合 ----
+
+  /**
+   * 中间省略：保留前若干段 + 末两段，中间用 … 替代。
+   * 例：src/main/java/com/foo/bar/baz/service/impl/UserServiceImpl.java
+   *   → src/main/java/…/service/impl/UserServiceImpl.java
+   * 短路径 / 段数少时原样返回。
+   */
+  function midEllipsisPath(path, maxLen) {
+    if (!path) return '';
+    const max = maxLen || 70;
+    if (path.length <= max) return path;
+    const parts = path.split('/');
+    if (parts.length <= 3) {
+      // 单层文件名也太长：从字符层中间切
+      const keep = Math.max(8, Math.floor((max - 1) / 2));
+      return path.slice(0, keep) + '…' + path.slice(path.length - keep);
+    }
+    // 优先按"段"省略：从末尾保留 2 段，从开头保留若干段，直到长度合规
+    const tail = parts.slice(-2).join('/');
+    for (let head = parts.length - 3; head >= 1; head--) {
+      const candidate = parts.slice(0, head).join('/') + '/…/' + tail;
+      if (candidate.length <= max) return candidate;
+    }
+    // 段省略仍不够：兜底字符省略
+    const keep = Math.max(8, Math.floor((max - 1) / 2));
+    return path.slice(0, keep) + '…' + path.slice(path.length - keep);
+  }
+
   function groupByFile(list) {
     const groups = new Map();
     for (const f of list) {
@@ -150,7 +178,7 @@
               const rowId = `file-${targetId}-${gi}`;
               return `
                 <tr class="file-row" data-row-id="${rowId}" style="cursor:pointer">
-                  <td class="col-path"><i class="ti ti-chevron-right me-1 file-chevron"></i><code class="small" title="${escapeHtml(g.path)}">${escapeHtml(g.path)}</code></td>
+                  <td class="col-path"><i class="ti ti-chevron-right me-1 file-chevron"></i><code title="${escapeHtml(g.path)}">${escapeHtml(midEllipsisPath(g.path, 80))}</code></td>
                   <td class="col-badges">
                     ${g.counts.ERROR ? `<span class="badge bg-red-lt me-1">${g.counts.ERROR} 错</span>` : ''}
                     ${g.counts.WARN ? `<span class="badge bg-yellow-lt me-1">${g.counts.WARN} 警</span>` : ''}
