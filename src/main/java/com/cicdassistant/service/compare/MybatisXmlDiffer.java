@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
@@ -113,9 +114,73 @@ public class MybatisXmlDiffer implements FileDiffer {
             String id = el.getAttribute("id");
             if (id == null || id.isEmpty()) id = "(no-id-" + i + ")";
             String key = namespace + "::" + tag + "::" + id;
-            snap.statements.put(key, el.getTextContent().trim());
+            // 之前用 el.getTextContent()，会把 <if>/<foreach>/<choose>/<where> 等动态标签整个吞掉，
+            // 只剩内部文本 —— 两个条件不同的 <if> 会折叠成相同字符串，漏报。
+            // 改用 outer-XML 序列化，保留所有子元素标签和属性，让 differ 真正按完整定义比对。
+            snap.statements.put(key, serializeOuter(el).trim());
         }
         return snap;
+    }
+
+    /**
+     * 把一个元素及其所有子节点重新序列化成 XML 字符串，保留 tag / 属性 / 文本 / CDATA / 注释。
+     * 用自己写的而不是 Transformer：
+     *  - 不引 javax.xml.transform 依赖
+     *  - 不需要处理 namespace 前缀重定义、xml declaration 这些花活
+     *  - 跨 JDK 输出稳定（Transformer 默认输出顺序在不同 JDK 上会变，影响 hash 比对）
+     */
+    private static String serializeOuter(Node node) {
+        StringBuilder sb = new StringBuilder();
+        appendNode(sb, node);
+        return sb.toString();
+    }
+
+    private static void appendNode(StringBuilder sb, Node node) {
+        switch (node.getNodeType()) {
+            case Node.ELEMENT_NODE: {
+                Element el = (Element) node;
+                sb.append('<').append(el.getTagName());
+                NamedNodeMap attrs = el.getAttributes();
+                // 属性按 name 排序，保证 hash 稳定（DOM 解析顺序不保证）
+                List<String> names = new ArrayList<>();
+                for (int i = 0; i < attrs.getLength(); i++) names.add(attrs.item(i).getNodeName());
+                Collections.sort(names);
+                for (String n : names) {
+                    sb.append(' ').append(n).append("=\"")
+                      .append(escapeAttr(attrs.getNamedItem(n).getNodeValue())).append('"');
+                }
+                NodeList kids = el.getChildNodes();
+                if (kids.getLength() == 0) {
+                    sb.append("/>");
+                } else {
+                    sb.append('>');
+                    for (int i = 0; i < kids.getLength(); i++) appendNode(sb, kids.item(i));
+                    sb.append("</").append(el.getTagName()).append('>');
+                }
+                break;
+            }
+            case Node.TEXT_NODE:
+                sb.append(escapeText(node.getNodeValue()));
+                break;
+            case Node.CDATA_SECTION_NODE:
+                sb.append("<![CDATA[").append(node.getNodeValue()).append("]]>");
+                break;
+            case Node.COMMENT_NODE:
+                sb.append("<!--").append(node.getNodeValue()).append("-->");
+                break;
+            default:
+                // 忽略 ProcessingInstruction / EntityReference 等：mybatis xml 用不到
+        }
+    }
+
+    private static String escapeAttr(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;");
+    }
+
+    private static String escapeText(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static <T> Set<T> minus(Set<T> a, Set<T> b) {

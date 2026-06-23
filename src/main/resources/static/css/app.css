@@ -47,21 +47,32 @@
     table-layout: fixed;
     width: 100%;
 }
+.findings-file-table > thead > tr > th,
+.findings-file-table > tbody > tr.file-row > td {
+    padding-top: .75rem;
+    padding-bottom: .75rem;
+    vertical-align: middle;
+}
+.findings-file-table > tbody > tr.file-row {
+    border-top: 1px solid var(--tblr-border-color);
+}
+.findings-file-table > tbody > tr.file-row:hover {
+    background-color: var(--tblr-bg-surface-secondary, rgba(0,0,0,0.025));
+}
 .findings-file-table td,
 .findings-file-table th {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 }
 .findings-file-table .col-path { width: 55%; }
 .findings-file-table .col-badges { width: 30%; white-space: normal; }
 .findings-file-table .col-actions { width: 15%; text-align: right; white-space: nowrap; }
 .findings-file-table .col-path code {
-    display: inline-block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: bottom;
+    font-size: .85rem;
+    white-space: nowrap;
+}
+.findings-file-table .col-path .file-chevron {
+    color: var(--tblr-secondary);
 }
 
 /* 内层每条 finding 的表格 */
