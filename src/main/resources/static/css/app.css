@@ -160,6 +160,31 @@
     white-space: pre;
 }
 .diff-box .diff-hunk-header:first-child { margin-top: 0; border-top: none; }
+
+/* "触发本 finding 的那几行" 高亮：底色加重 + 左边一根粗条 + ⚠ 标 */
+.diff-box .diff-line.flagged.add {
+    background: rgba(46, 168, 70, 0.55);
+    border-left: 3px solid #6ce46c;
+    padding-left: 5px;
+}
+.diff-box .diff-line.flagged.del {
+    background: rgba(212, 70, 70, 0.55);
+    border-left: 3px solid #ff6e6e;
+    padding-left: 5px;
+}
+.diff-box .diff-flag {
+    flex: 0 0 auto;
+    width: 1.2em;
+    text-align: center;
+    color: #ffd966;
+    user-select: none;
+    margin-right: 2px;
+}
+.diff-box .diff-flag-spacer {
+    flex: 0 0 auto;
+    width: 1.2em;
+    margin-right: 2px;
+}
 .diff-box .diff-marker {
     flex: 0 0 auto;
     width: 1em;

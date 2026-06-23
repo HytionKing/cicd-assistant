@@ -330,28 +330,30 @@
   }
 
   /**
-   * 把后端已经组好的 unified-diff 文本按 patch 风格渲染：
-   *  - @@ 行作为分组头（蓝紫色）
-   *  - + 行绿底、- 行红底、上下文行普通
-   * patch verifier 的 snippet 走这个，不再走 LCS 算法。
+   * 渲染 patch verifier 的 snippet。后端编码：
+   *   @@ 行原样
+   *   其它行：第 1 字符 = ' '/'+'/'-'，第 2 字符 = ' ' 或 '!'（'!' 表示触发 finding 的"那几行"）
+   * 命中 '!' 的行加重色 + ⚠ 图标，让 reviewer 一眼锁定。
    */
   function renderPatchSnippet(text) {
     const lines = text.split(/\r?\n/);
-    // 处理末尾空行：split 把 "a\nb\n" 拆成 ["a","b",""]，丢掉空尾巴
     if (lines.length && lines[lines.length - 1] === '') lines.pop();
     return lines.map(line => {
       if (line.startsWith('@@')) {
         return `<div class="diff-hunk-header">${escapeHtml(line)}</div>`;
       }
-      if (line.startsWith('+')) {
-        return `<div class="diff-line add"><span class="diff-marker">+</span><span class="diff-text">${escapeHtml(line.substring(1))}</span></div>`;
-      }
-      if (line.startsWith('-')) {
-        return `<div class="diff-line del"><span class="diff-marker">-</span><span class="diff-text">${escapeHtml(line.substring(1))}</span></div>`;
-      }
-      // 上下文行（' ' 开头或后端塞的空 " "）
-      const body = line.startsWith(' ') ? line.substring(1) : line;
-      return `<div class="diff-line eq"><span class="diff-marker"> </span><span class="diff-text">${escapeHtml(body)}</span></div>`;
+      const type = line.length > 0 ? line.charAt(0) : ' ';
+      const flag = line.length > 1 ? line.charAt(1) : ' ';
+      const body = line.length > 2 ? line.substring(2) : '';
+      let cls = 'eq', marker = ' ';
+      if (type === '+') { cls = 'add'; marker = '+'; }
+      else if (type === '-') { cls = 'del'; marker = '-'; }
+      const flagged = flag === '!';
+      if (flagged) cls += ' flagged';
+      const flagBadge = flagged
+        ? `<span class="diff-flag" title="${type === '+' ? '此行未在目标分支生效' : '此行已删除但目标分支仍存在'}">⚠</span>`
+        : `<span class="diff-flag-spacer"></span>`;
+      return `<div class="diff-line ${cls}">${flagBadge}<span class="diff-marker">${marker}</span><span class="diff-text">${escapeHtml(body)}</span></div>`;
     }).join('');
   }
 

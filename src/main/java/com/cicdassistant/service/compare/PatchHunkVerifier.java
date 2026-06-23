@@ -59,58 +59,76 @@ public class PatchHunkVerifier {
         String ext = extOf(filePath);
         String normTarget = normalizeForSearch(targetContent == null ? "" : targetContent);
 
-        // 按 hunk 维度统计：missing add / lingering remove
+        // 给每个 hunk 算出"哪些行（按行索引）是未命中 add / 漏删 del"，方便前端高亮定位
         int totalEssAdds = 0, totalMissAdds = 0;
         int totalEssDels = 0, totalLingerDels = 0;
-        List<Hunk> hunksWithMissingAdd = new ArrayList<>();
-        List<Hunk> hunksWithLingeringDel = new ArrayList<>();
+        List<HunkFlags> missingHunks = new ArrayList<>();
+        List<HunkFlags> lingeringHunks = new ArrayList<>();
 
         for (Hunk h : parsed.hunks) {
-            boolean missInHunk = false, lingerInHunk = false;
-            for (String add : h.addedLines()) {
-                if (!isEssential(add, ext)) continue;
-                totalEssAdds++;
-                String norm = normalizeLine(add);
-                if (norm.length() < MIN_MATCH_LEN) continue;
-                if (!normTarget.contains(norm)) {
-                    missInHunk = true;
-                    totalMissAdds++;
+            boolean[] addFlag = new boolean[h.lines.size()];
+            boolean[] delFlag = new boolean[h.lines.size()];
+            boolean anyMiss = false, anyLinger = false;
+            for (int i = 0; i < h.lines.size(); i++) {
+                String l = h.lines.get(i);
+                if (l.isEmpty()) continue;
+                char c = l.charAt(0);
+                String body = l.substring(1);
+                if (c == '+') {
+                    if (!isEssential(body, ext)) continue;
+                    totalEssAdds++;
+                    String norm = normalizeLine(body);
+                    if (norm.length() < MIN_MATCH_LEN) continue;
+                    if (!normTarget.contains(norm)) {
+                        addFlag[i] = true;
+                        anyMiss = true;
+                        totalMissAdds++;
+                    }
+                } else if (c == '-') {
+                    if (!isEssential(body, ext)) continue;
+                    totalEssDels++;
+                    String norm = normalizeLine(body);
+                    if (norm.length() < MIN_MATCH_LEN) continue;
+                    if (normTarget.contains(norm)) {
+                        delFlag[i] = true;
+                        anyLinger = true;
+                        totalLingerDels++;
+                    }
                 }
             }
-            for (String del : h.removedLines()) {
-                if (!isEssential(del, ext)) continue;
-                totalEssDels++;
-                String norm = normalizeLine(del);
-                if (norm.length() < MIN_MATCH_LEN) continue;
-                if (normTarget.contains(norm)) {
-                    lingerInHunk = true;
-                    totalLingerDels++;
-                }
-            }
-            if (missInHunk) hunksWithMissingAdd.add(h);
-            if (lingerInHunk) hunksWithLingeringDel.add(h);
+            if (anyMiss) missingHunks.add(new HunkFlags(h, addFlag, null));
+            if (anyLinger) lingeringHunks.add(new HunkFlags(h, null, delFlag));
         }
 
-        // 新文件场景：patch 全是 + 行，target 还根本没有该文件
+        // 新文件场景：patch 全是 + 行，target 还根本没有该文件 —— 所有 + 行都标记
         if (totalEssDels == 0 && totalEssAdds > 0 && (targetContent == null || targetContent.isEmpty())) {
+            List<HunkFlags> allFlagged = new ArrayList<>();
+            for (Hunk h : parsed.hunks) {
+                boolean[] addFlag = new boolean[h.lines.size()];
+                for (int i = 0; i < h.lines.size(); i++) {
+                    String l = h.lines.get(i);
+                    if (!l.isEmpty() && l.charAt(0) == '+') addFlag[i] = true;
+                }
+                allFlagged.add(new HunkFlags(h, addFlag, null));
+            }
             out.add(make(filePath, mrIid, "MR_FILE_MISSING", "ERROR",
                     "MR " + iidStr(mrIid) + " 新增的文件 " + filePath + " 在目标分支不存在",
-                    formatHunks(parsed.hunks)));
+                    formatHunksWithFlags(allFlagged)));
             return out;
         }
 
-        if (!hunksWithMissingAdd.isEmpty()) {
+        if (!missingHunks.isEmpty()) {
             String severity = severityForMissing(totalEssAdds, totalMissAdds);
             out.add(make(filePath, mrIid, "MR_LINE_MISSING", severity,
-                    String.format("MR %s 引入的 %d 行改动在目标分支未生效（共 %d 行实质改动）",
+                    String.format("MR %s 引入的 %d 行改动在目标分支未生效（共 %d 行实质改动；高亮 ⚠ 标注未命中行）",
                             iidStr(mrIid), totalMissAdds, totalEssAdds),
-                    formatHunks(hunksWithMissingAdd)));
+                    formatHunksWithFlags(missingHunks)));
         }
-        if (!hunksWithLingeringDel.isEmpty()) {
+        if (!lingeringHunks.isEmpty()) {
             out.add(make(filePath, mrIid, "MR_LINE_LINGERING", "INFO",
-                    String.format("MR %s 已删除的 %d 行在目标分支仍存在（疑似漏删）",
+                    String.format("MR %s 已删除的 %d 行在目标分支仍存在（疑似漏删；高亮 ⚠ 标注残留行）",
                             iidStr(mrIid), totalLingerDels),
-                    formatHunks(hunksWithLingeringDel)));
+                    formatHunksWithFlags(lingeringHunks)));
         }
         return out;
     }
@@ -185,14 +203,39 @@ public class PatchHunkVerifier {
         final List<Hunk> hunks = new ArrayList<>();
     }
 
-    /** 把若干 hunk 重新拼回 unified-diff 文本，留给前端按 patch 风格渲染。 */
-    private static String formatHunks(List<Hunk> hunks) {
+    /**
+     * 把若干 hunk 拼回 snippet 文本，每个 +/-/context 行用 2 字符前缀编码：
+     * <pre>
+     *   [类型][标记]<原始内容>
+     *   类型 ∈ { '+', '-', ' ' }
+     *   标记 ∈ { '!', ' ' }    '!' 表示这一行就是触发 finding 的行（未生效 / 漏删）
+     * </pre>
+     * @@ header 行原样保留（不加前缀）。前端按这套规则解析并对 '!' 行高亮。
+     */
+    private static String formatHunksWithFlags(List<HunkFlags> hunks) {
         StringBuilder sb = new StringBuilder();
-        for (Hunk h : hunks) {
+        for (HunkFlags hf : hunks) {
             if (sb.length() > 0) sb.append('\n');
-            sb.append(h.header).append('\n');
-            for (String l : h.lines) {
-                sb.append(l).append('\n');
+            sb.append(hf.hunk.header).append('\n');
+            for (int i = 0; i < hf.hunk.lines.size(); i++) {
+                String l = hf.hunk.lines.get(i);
+                char type, flag = ' ';
+                String body;
+                if (l.isEmpty()) {
+                    type = ' '; body = "";
+                } else {
+                    char c = l.charAt(0);
+                    if (c == '+' || c == '-' || c == ' ') {
+                        type = c;
+                        body = l.substring(1);
+                    } else {
+                        type = ' ';
+                        body = l;
+                    }
+                }
+                if (type == '+' && hf.addFlag != null && hf.addFlag[i]) flag = '!';
+                if (type == '-' && hf.delFlag != null && hf.delFlag[i]) flag = '!';
+                sb.append(type).append(flag).append(body).append('\n');
                 if (sb.length() > MAX_SNIPPET_CHARS) {
                     sb.append("... [截断]\n");
                     return sb.toString();
@@ -200,6 +243,17 @@ public class PatchHunkVerifier {
             }
         }
         return sb.toString();
+    }
+
+    private static class HunkFlags {
+        final Hunk hunk;
+        final boolean[] addFlag;
+        final boolean[] delFlag;
+        HunkFlags(Hunk hunk, boolean[] addFlag, boolean[] delFlag) {
+            this.hunk = hunk;
+            this.addFlag = addFlag;
+            this.delFlag = delFlag;
+        }
     }
 
     // ---- normalization & essential filtering ----
