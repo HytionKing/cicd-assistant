@@ -32,8 +32,8 @@ public class PatchHunkVerifier {
 
     /** 行规范化后短于此值的不参与匹配（容易碰巧命中）。 */
     private static final int MIN_MATCH_LEN = 8;
-    /** 单条 finding snippet 最多列多少行未命中样本。 */
-    private static final int SAMPLE_LIMIT = 8;
+    /** 单条 finding snippet 最多字符数。 */
+    private static final int MAX_SNIPPET_CHARS = 6000;
 
     /** 行注释 / 单符号 / 闭合标签等噪音，所有语言通用。 */
     private static final Set<String> NOISE_LITERALS = new HashSet<>(Arrays.asList(
@@ -52,54 +52,65 @@ public class PatchHunkVerifier {
             log.warn("[PATCH-VERIFY] parse failed file={} mr=!{} err={}", filePath, mrIid, e.getMessage());
             out.add(make(filePath, mrIid, "PATCH_PARSE_FAILED", "WARN",
                     "MR " + iidStr(mrIid) + " 的 patch 解析失败：" + e.getClass().getSimpleName(),
-                    truncate(mrPatch, 1500), null));
+                    truncate(mrPatch, 1500)));
             return out;
         }
 
         String ext = extOf(filePath);
-        List<String> essAdds = new ArrayList<>();
-        List<String> essDels = new ArrayList<>();
-        for (String line : parsed.added) if (isEssential(line, ext)) essAdds.add(line);
-        for (String line : parsed.removed) if (isEssential(line, ext)) essDels.add(line);
+        String normTarget = normalizeForSearch(targetContent == null ? "" : targetContent);
 
-        // 新文件场景：MR 全是 + 行，target 还根本没有这个文件
-        if (essDels.isEmpty() && !essAdds.isEmpty() && (targetContent == null || targetContent.isEmpty())) {
+        // 按 hunk 维度统计：missing add / lingering remove
+        int totalEssAdds = 0, totalMissAdds = 0;
+        int totalEssDels = 0, totalLingerDels = 0;
+        List<Hunk> hunksWithMissingAdd = new ArrayList<>();
+        List<Hunk> hunksWithLingeringDel = new ArrayList<>();
+
+        for (Hunk h : parsed.hunks) {
+            boolean missInHunk = false, lingerInHunk = false;
+            for (String add : h.addedLines()) {
+                if (!isEssential(add, ext)) continue;
+                totalEssAdds++;
+                String norm = normalizeLine(add);
+                if (norm.length() < MIN_MATCH_LEN) continue;
+                if (!normTarget.contains(norm)) {
+                    missInHunk = true;
+                    totalMissAdds++;
+                }
+            }
+            for (String del : h.removedLines()) {
+                if (!isEssential(del, ext)) continue;
+                totalEssDels++;
+                String norm = normalizeLine(del);
+                if (norm.length() < MIN_MATCH_LEN) continue;
+                if (normTarget.contains(norm)) {
+                    lingerInHunk = true;
+                    totalLingerDels++;
+                }
+            }
+            if (missInHunk) hunksWithMissingAdd.add(h);
+            if (lingerInHunk) hunksWithLingeringDel.add(h);
+        }
+
+        // 新文件场景：patch 全是 + 行，target 还根本没有该文件
+        if (totalEssDels == 0 && totalEssAdds > 0 && (targetContent == null || targetContent.isEmpty())) {
             out.add(make(filePath, mrIid, "MR_FILE_MISSING", "ERROR",
                     "MR " + iidStr(mrIid) + " 新增的文件 " + filePath + " 在目标分支不存在",
-                    joinSample(essAdds), null));
+                    formatHunks(parsed.hunks)));
             return out;
         }
 
-        String normTarget = normalizeForSearch(targetContent == null ? "" : targetContent);
-
-        // 1) + 行未在 target 出现 → 上线丢失
-        List<String> missingAdds = new ArrayList<>();
-        for (String line : essAdds) {
-            String norm = normalizeLine(line);
-            if (norm.length() < MIN_MATCH_LEN) continue;
-            if (!normTarget.contains(norm)) missingAdds.add(line);
-        }
-        // 2) - 行仍在 target 出现 → 残留未清理
-        List<String> lingeringDels = new ArrayList<>();
-        for (String line : essDels) {
-            String norm = normalizeLine(line);
-            if (norm.length() < MIN_MATCH_LEN) continue;
-            if (normTarget.contains(norm)) lingeringDels.add(line);
-        }
-
-        if (!missingAdds.isEmpty()) {
-            String severity = severityForMissing(essAdds.size(), missingAdds.size());
+        if (!hunksWithMissingAdd.isEmpty()) {
+            String severity = severityForMissing(totalEssAdds, totalMissAdds);
             out.add(make(filePath, mrIid, "MR_LINE_MISSING", severity,
                     String.format("MR %s 引入的 %d 行改动在目标分支未生效（共 %d 行实质改动）",
-                            iidStr(mrIid), missingAdds.size(), essAdds.size()),
-                    joinSample(missingAdds),
-                    "（target 当前文件中未匹配到上述行）"));
+                            iidStr(mrIid), totalMissAdds, totalEssAdds),
+                    formatHunks(hunksWithMissingAdd)));
         }
-        if (!lingeringDels.isEmpty()) {
+        if (!hunksWithLingeringDel.isEmpty()) {
             out.add(make(filePath, mrIid, "MR_LINE_LINGERING", "INFO",
-                    String.format("MR %s 已删除的 %d 行在目标分支仍存在", iidStr(mrIid), lingeringDels.size()),
-                    joinSample(lingeringDels),
-                    "（target 当前文件中仍能搜到，疑似漏删）"));
+                    String.format("MR %s 已删除的 %d 行在目标分支仍存在（疑似漏删）",
+                            iidStr(mrIid), totalLingerDels),
+                    formatHunks(hunksWithLingeringDel)));
         }
         return out;
     }
@@ -113,34 +124,82 @@ public class PatchHunkVerifier {
 
     // ---- patch parsing ----
 
+    /**
+     * 解析成 hunk 列表，每个 hunk 保留它的 @@ header 和原始 +/-/<space> 行。
+     * 保留这些是为了 finding snippet 能完整渲染上下文：
+     *  - hunk header 末尾通常含包围方法签名（git diff 自动加），定位代码位置
+     *  - 上下文行让 reviewer 知道改动发生在哪个 SQL 标签 / 哪个 if 分支
+     */
     static ParsedPatch parsePatch(String patch) {
         ParsedPatch p = new ParsedPatch();
         if (patch == null) return p;
-        boolean inHunk = false;
+        Hunk current = null;
         for (String raw : patch.split("\\r?\\n", -1)) {
-            if (raw.startsWith("@@")) { inHunk = true; continue; }
-            if (!inHunk) continue;
-            // diff 文件头偶尔混在 hunk 之间（多 patch 拼接的情况）—— 安全起见也跳过
+            if (raw.startsWith("@@")) {
+                current = new Hunk();
+                current.header = raw;
+                p.hunks.add(current);
+                continue;
+            }
+            if (current == null) continue;
+            // 多 patch 拼接的情况，遇到下一个文件头就重置
             if (raw.startsWith("diff ") || raw.startsWith("index ")
                     || raw.startsWith("--- ") || raw.startsWith("+++ ")
                     || raw.startsWith("new file") || raw.startsWith("deleted file")
                     || raw.startsWith("similarity index") || raw.startsWith("rename ")) {
-                inHunk = false;
+                current = null;
                 continue;
             }
-            if (raw.isEmpty()) continue;
+            if (raw.isEmpty()) {
+                // hunk 内的纯空白上下文行，按"空上下文"保留以维持视觉行号对齐
+                current.lines.add(" ");
+                continue;
+            }
             char c = raw.charAt(0);
-            String body = raw.substring(1);
-            if (c == '+') p.added.add(body);
-            else if (c == '-') p.removed.add(body);
-            // 上下文行（' ' 开头）忽略
+            if (c == '+' || c == '-' || c == ' ') {
+                current.lines.add(raw);
+            }
+            // 其它前缀（如 \ "No newline at end of file"）直接丢弃
         }
         return p;
     }
 
+    static class Hunk {
+        String header = "";
+        final List<String> lines = new ArrayList<>();
+
+        List<String> addedLines() {
+            List<String> r = new ArrayList<>();
+            for (String l : lines) if (!l.isEmpty() && l.charAt(0) == '+') r.add(l.substring(1));
+            return r;
+        }
+
+        List<String> removedLines() {
+            List<String> r = new ArrayList<>();
+            for (String l : lines) if (!l.isEmpty() && l.charAt(0) == '-') r.add(l.substring(1));
+            return r;
+        }
+    }
+
     static class ParsedPatch {
-        final List<String> added = new ArrayList<>();
-        final List<String> removed = new ArrayList<>();
+        final List<Hunk> hunks = new ArrayList<>();
+    }
+
+    /** 把若干 hunk 重新拼回 unified-diff 文本，留给前端按 patch 风格渲染。 */
+    private static String formatHunks(List<Hunk> hunks) {
+        StringBuilder sb = new StringBuilder();
+        for (Hunk h : hunks) {
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(h.header).append('\n');
+            for (String l : h.lines) {
+                sb.append(l).append('\n');
+                if (sb.length() > MAX_SNIPPET_CHARS) {
+                    sb.append("... [截断]\n");
+                    return sb.toString();
+                }
+            }
+        }
+        return sb.toString();
     }
 
     // ---- normalization & essential filtering ----
@@ -202,15 +261,6 @@ public class PatchHunkVerifier {
 
     // ---- finding helpers ----
 
-    private static String joinSample(List<String> lines) {
-        StringBuilder sb = new StringBuilder();
-        int n = Math.min(SAMPLE_LIMIT, lines.size());
-        for (int i = 0; i < n; i++) sb.append(lines.get(i)).append('\n');
-        if (lines.size() > SAMPLE_LIMIT) sb.append("... 还有 ").append(lines.size() - SAMPLE_LIMIT).append(" 行（共 ")
-                .append(lines.size()).append(" 行）\n");
-        return sb.toString();
-    }
-
     private static String truncate(String s, int max) {
         if (s == null) return null;
         return s.length() <= max ? s : s.substring(0, max) + "\n... [截断]";
@@ -220,8 +270,12 @@ public class PatchHunkVerifier {
         return iid == null ? "(未知)" : "!" + iid;
     }
 
+    /**
+     * patch verifier 的 finding 只用 baselineSnippet 装 unified-diff 文本，targetSnippet 留空。
+     * 前端检测到 detector=RULE_PATCH 时按 patch 渲染（@@/+/-），不会再走 LCS diff 的两侧比对。
+     */
     private static CompareFinding make(String path, Integer mrIid, String type, String severity,
-                                       String summary, String baselineSnippet, String targetSnippet) {
+                                       String summary, String patchSnippet) {
         CompareFinding f = new CompareFinding();
         f.setFilePath(path);
         f.setDetector("RULE_PATCH");
@@ -229,8 +283,8 @@ public class PatchHunkVerifier {
         f.setSeverity(severity);
         f.setSummary(summary);
         f.setMrIid(mrIid);
-        f.setBaselineSnippet(baselineSnippet);
-        f.setTargetSnippet(targetSnippet);
+        f.setBaselineSnippet(patchSnippet);
+        f.setTargetSnippet(null);
         f.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
         return f;
     }

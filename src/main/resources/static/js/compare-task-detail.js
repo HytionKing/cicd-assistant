@@ -276,9 +276,25 @@
     findingTitle.textContent = `${f.severity} · ${f.filePath}`;
     const hasBaseline = !!(f.baselineSnippet && f.baselineSnippet.trim());
     const hasTarget = !!(f.targetSnippet && f.targetSnippet.trim());
+    const isPatch = f.detector === 'RULE_PATCH' && hasBaseline;
 
     let snippetHtml = '';
-    if (hasBaseline && hasTarget) {
+    if (isPatch) {
+      const titleLabel = f.type === 'MR_LINE_LINGERING'
+        ? 'MR 已删除但目标分支仍存在的片段'
+        : (f.type === 'MR_FILE_MISSING'
+            ? 'MR 新增的文件内容（目标分支不存在）'
+            : 'MR 引入但目标分支未生效的片段');
+      snippetHtml = `
+        <div class="finding-modal-section-title">
+          <i class="ti ti-git-pull-request"></i>${escapeHtml(titleLabel)}
+          <span class="badge bg-red-lt">- MR 删除</span>
+          <span class="badge bg-green-lt">+ MR 新增</span>
+          <span class="text-secondary small ms-2">@@ 行末尾通常是包围方法/标签，可用于定位</span>
+        </div>
+        <div class="diff-box">${renderPatchSnippet(f.baselineSnippet)}</div>
+      `;
+    } else if (hasBaseline && hasTarget) {
       snippetHtml = `
         <div class="finding-modal-section-title">
           <i class="ti ti-arrows-diff"></i>
@@ -311,6 +327,32 @@
       ${f.llmComment ? `<div class="finding-modal-section-title"><i class="ti ti-robot"></i>AI 评语</div><div class="alert alert-info mb-0">${escapeHtml(f.llmComment)}</div>` : ''}
     `;
     findingModal.show();
+  }
+
+  /**
+   * 把后端已经组好的 unified-diff 文本按 patch 风格渲染：
+   *  - @@ 行作为分组头（蓝紫色）
+   *  - + 行绿底、- 行红底、上下文行普通
+   * patch verifier 的 snippet 走这个，不再走 LCS 算法。
+   */
+  function renderPatchSnippet(text) {
+    const lines = text.split(/\r?\n/);
+    // 处理末尾空行：split 把 "a\nb\n" 拆成 ["a","b",""]，丢掉空尾巴
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    return lines.map(line => {
+      if (line.startsWith('@@')) {
+        return `<div class="diff-hunk-header">${escapeHtml(line)}</div>`;
+      }
+      if (line.startsWith('+')) {
+        return `<div class="diff-line add"><span class="diff-marker">+</span><span class="diff-text">${escapeHtml(line.substring(1))}</span></div>`;
+      }
+      if (line.startsWith('-')) {
+        return `<div class="diff-line del"><span class="diff-marker">-</span><span class="diff-text">${escapeHtml(line.substring(1))}</span></div>`;
+      }
+      // 上下文行（' ' 开头或后端塞的空 " "）
+      const body = line.startsWith(' ') ? line.substring(1) : line;
+      return `<div class="diff-line eq"><span class="diff-marker"> </span><span class="diff-text">${escapeHtml(body)}</span></div>`;
+    }).join('');
   }
 
   /**
