@@ -55,20 +55,10 @@ public class GitWorkspaceManager {
         String url = buildAuthGitUrl(repo);
         log.info("[COMPARE-GIT] clone {} -> {} (--no-checkout, no working tree)", repo.getName(), root.getAbsolutePath());
         // --no-checkout：我们不需要 working tree 上的文件，全部用 git show 读
-        // --filter=blob:none：blob 按需拉，节省磁盘；但需 git ≥ 2.19 且服务端 uploadpack.allowFilter 开启
-        try {
-            runGit(root.getParentFile(), "clone", "--no-checkout", "--filter=blob:none", url, root.getName());
-        } catch (IOException e) {
-            // 老 git（< 2.19）会因 --filter 未识别返回 exit=129；服务端禁了 partial clone 通常 exit=128。
-            // 任一情况降级为完整 clone（仍带 --no-checkout，working tree 还是空的）。
-            if (e.getMessage() != null && (e.getMessage().contains("exit=129") || e.getMessage().contains("exit=128"))) {
-                log.warn("[COMPARE-GIT] partial clone failed ({}), retry without --filter", e.getMessage());
-                deleteDirQuiet(new File(root.getParentFile(), root.getName()));
-                runGit(root.getParentFile(), "clone", "--no-checkout", url, root.getName());
-            } else {
-                throw e;
-            }
-        }
+        // 不用 --filter=blob:none：要求 git ≥ 2.19 且服务端 uploadpack.allowFilter=true，
+        // 实际生产里很多 GitLab（如 12.x）和老 git 客户端都不支持，先试再降级会留 warning，
+        // 不如直接全量；working tree 已经是空的，磁盘开销仅 .git/objects。
+        runGit(root.getParentFile(), "clone", "--no-checkout", url, root.getName());
         return root;
     }
 
@@ -153,15 +143,6 @@ public class GitWorkspaceManager {
             }
         }
         return out;
-    }
-
-    private static void deleteDirQuiet(File dir) {
-        if (dir == null || !dir.exists()) return;
-        File[] kids = dir.listFiles();
-        if (kids != null) for (File k : kids) {
-            if (k.isDirectory()) deleteDirQuiet(k); else k.delete();
-        }
-        dir.delete();
     }
 
     private ExecResult runGitCapturing(File cwd, String... args) throws IOException, InterruptedException {
