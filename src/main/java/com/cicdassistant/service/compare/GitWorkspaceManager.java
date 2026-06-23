@@ -55,8 +55,20 @@ public class GitWorkspaceManager {
         String url = buildAuthGitUrl(repo);
         log.info("[COMPARE-GIT] clone {} -> {} (--no-checkout, no working tree)", repo.getName(), root.getAbsolutePath());
         // --no-checkout：我们不需要 working tree 上的文件，全部用 git show 读
-        // --filter=blob:none：blob 按需拉，节省磁盘
-        runGit(root.getParentFile(), "clone", "--no-checkout", "--filter=blob:none", url, root.getName());
+        // --filter=blob:none：blob 按需拉，节省磁盘；但需 git ≥ 2.19 且服务端 uploadpack.allowFilter 开启
+        try {
+            runGit(root.getParentFile(), "clone", "--no-checkout", "--filter=blob:none", url, root.getName());
+        } catch (IOException e) {
+            // 老 git（< 2.19）会因 --filter 未识别返回 exit=129；服务端禁了 partial clone 通常 exit=128。
+            // 任一情况降级为完整 clone（仍带 --no-checkout，working tree 还是空的）。
+            if (e.getMessage() != null && (e.getMessage().contains("exit=129") || e.getMessage().contains("exit=128"))) {
+                log.warn("[COMPARE-GIT] partial clone failed ({}), retry without --filter", e.getMessage());
+                deleteDirQuiet(new File(root.getParentFile(), root.getName()));
+                runGit(root.getParentFile(), "clone", "--no-checkout", url, root.getName());
+            } else {
+                throw e;
+            }
+        }
         return root;
     }
 
@@ -118,9 +130,38 @@ public class GitWorkspaceManager {
         cmd.addAll(Arrays.asList(args));
         ProcessBuilder pb = new ProcessBuilder(cmd).directory(cwd).redirectErrorStream(true);
         Process p = pb.start();
-        drain(p.getInputStream());
+        String output = readStream(p.getInputStream());
         int code = p.waitFor();
-        if (code != 0) throw new IOException("git " + Arrays.toString(args) + " exit=" + code);
+        if (code != 0) {
+            // 把 git 自己的输出带到异常里，避免只看到 exit code 猜不到原因（认证 / 老选项 / 网络都可能 129）
+            String tail = output == null ? "" : output.trim();
+            if (tail.length() > 800) tail = tail.substring(tail.length() - 800);
+            throw new IOException("git " + Arrays.toString(redact(args)) + " exit=" + code
+                    + (tail.isEmpty() ? "" : " :: " + tail));
+        }
+    }
+
+    /** 把 args 中形如 https://user:token@host/... 的凭据脱敏，避免日志/异常里泄露 token。 */
+    private static String[] redact(String[] args) {
+        String[] out = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            String a = args[i];
+            if (a != null && a.matches("(?i)https?://[^/@\\s]+:[^@\\s]+@.*")) {
+                out[i] = a.replaceFirst("://[^/@]+@", "://***@");
+            } else {
+                out[i] = a;
+            }
+        }
+        return out;
+    }
+
+    private static void deleteDirQuiet(File dir) {
+        if (dir == null || !dir.exists()) return;
+        File[] kids = dir.listFiles();
+        if (kids != null) for (File k : kids) {
+            if (k.isDirectory()) deleteDirQuiet(k); else k.delete();
+        }
+        dir.delete();
     }
 
     private ExecResult runGitCapturing(File cwd, String... args) throws IOException, InterruptedException {
@@ -145,11 +186,6 @@ public class GitWorkspaceManager {
         if (!READ_ONLY_GIT_COMMANDS.contains(sub)) {
             throw new SecurityException("blocked write-capable git subcommand: " + sub);
         }
-    }
-
-    private void drain(InputStream in) throws IOException {
-        byte[] buf = new byte[8192];
-        while (in.read(buf) >= 0) { /* discard */ }
     }
 
     private String readStream(InputStream in) throws IOException {
