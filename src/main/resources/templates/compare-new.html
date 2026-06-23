@@ -29,7 +29,11 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label class="form-label">基准分支</label>
+                                <label class="form-label">
+                                    基准分支
+                                    <span id="baseline-mr-hint" class="text-secondary fw-normal d-none"
+                                          style="font-size: .8em;">（MR 模式下仅作上下文参照，不参与判定）</span>
+                                </label>
                                 <div class="d-flex gap-2">
                                     <input id="inp-baseline" class="form-control" placeholder="如 develop / fat / uat"/>
                                     <button id="btn-pick-baseline" class="btn btn-outline-secondary" type="button" title="从分支列表选">
@@ -53,9 +57,15 @@
                             </div>
 
                             <div class="col-12">
-                                <div class="d-flex align-items-center mb-1">
+                                <div class="d-flex align-items-center mb-1 flex-wrap gap-2">
                                     <label class="form-label mb-0">MR 列表（按被对比分支分组）</label>
-                                    <button id="btn-load-mrs" class="btn btn-sm btn-outline-primary ms-3" type="button">
+                                    <div class="d-flex align-items-center ms-3 gap-1">
+                                        <label class="form-label mb-0 small text-secondary">每分支拉取</label>
+                                        <input id="inp-mr-limit" type="number" min="1" max="100"
+                                               class="form-control form-control-sm" style="width: 80px"/>
+                                        <span class="small text-secondary">条</span>
+                                    </div>
+                                    <button id="btn-load-mrs" class="btn btn-sm btn-outline-primary ms-2" type="button">
                                         <i class="ti ti-search me-1"></i>查询 MR
                                     </button>
                                     <span id="mrs-msg" class="ms-3 text-secondary small"></span>

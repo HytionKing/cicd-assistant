@@ -13,8 +13,26 @@
   const selWebhook = document.getElementById('sel-webhook');
   const selContexts = document.getElementById('sel-contexts');
   const contextsWrap = document.getElementById('contexts-wrap');
+  const inpMrLimit = document.getElementById('inp-mr-limit');
+  const baselineMrHint = document.getElementById('baseline-mr-hint');
 
   let allBranches = [];
+  let appConfig = { mrFetchDefaultLimit: 20, mrFetchMaxLimit: 100 };
+
+  async function loadConfig() {
+    try {
+      appConfig = await api.get('/api/compare/config');
+      inpMrLimit.value = appConfig.mrFetchDefaultLimit;
+      inpMrLimit.max = appConfig.mrFetchMaxLimit;
+    } catch (e) {
+      inpMrLimit.value = 20;
+    }
+  }
+
+  function updateBaselineHint() {
+    const hasAnyMrChecked = !!mrsBox.querySelector('.mr-check:checked');
+    baselineMrHint.classList.toggle('d-none', !hasAnyMrChecked);
+  }
 
   async function loadRepos() {
     const repos = await api.get('/api/repos');
@@ -107,11 +125,15 @@
     if (!id) { UI.warning('请先选择仓库'); return; }
     const targets = Array.from(targetsBox.querySelectorAll('input:checked')).map(i => i.value);
     if (targets.length === 0) { UI.warning('请先勾选至少一个被对比分支'); return; }
+    let lim = parseInt(inpMrLimit.value, 10);
+    if (!Number.isFinite(lim) || lim < 1) lim = appConfig.mrFetchDefaultLimit;
+    if (lim > appConfig.mrFetchMaxLimit) lim = appConfig.mrFetchMaxLimit;
     mrsMsg.textContent = '查询中...';
     mrsBox.innerHTML = '<span class="text-secondary small">查询中...</span>';
     try {
       const r = await api.get('/api/compare/recent-mrs?repoId=' + id +
-        '&targetBranches=' + encodeURIComponent(targets.join(',')));
+        '&targetBranches=' + encodeURIComponent(targets.join(',')) +
+        '&limit=' + lim);
       mrsMsg.textContent = '';
       const groups = r.groups || [];
       let total = 0;
@@ -144,13 +166,19 @@
         ev.preventDefault();
         const b = a.dataset.branch;
         mrsBox.querySelectorAll('.mr-check').forEach(i => { if (i.dataset.branch === b) i.checked = true; });
+        updateBaselineHint();
       });
       mrsBox.querySelectorAll('.group-none').forEach(a => a.onclick = (ev) => {
         ev.preventDefault();
         const b = a.dataset.branch;
         mrsBox.querySelectorAll('.mr-check').forEach(i => { if (i.dataset.branch === b) i.checked = false; });
+        updateBaselineHint();
+      });
+      mrsBox.addEventListener('change', (ev) => {
+        if (ev.target.classList && ev.target.classList.contains('mr-check')) updateBaselineHint();
       });
       mrsMsg.textContent = '共 ' + total + ' 条 MR';
+      updateBaselineHint();
     } catch (e) {
       mrsMsg.textContent = '';
       UI.danger('查询失败: ' + e.message);
@@ -190,6 +218,7 @@
     }
   };
 
+  await loadConfig();
   await loadRepos();
   await loadWebhooks();
   await loadContexts();

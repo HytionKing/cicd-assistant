@@ -28,9 +28,15 @@
   }
 
   function detectorBadge(d) {
-    return d === 'LLM'
-      ? '<span class="badge bg-purple-lt">AI</span>'
-      : '<span class="badge bg-cyan-lt">规则</span>';
+    if (d === 'LLM') return '<span class="badge bg-purple-lt">AI</span>';
+    if (d === 'RULE_PATCH') return '<span class="badge bg-teal-lt">MR 验证</span>';
+    return '<span class="badge bg-cyan-lt">规则</span>';
+  }
+
+  function detectorLabel(d) {
+    if (d === 'LLM') return 'AI';
+    if (d === 'RULE_PATCH') return 'MR 验证';
+    return '规则';
   }
 
   function cardsSignature(t, targets) {
@@ -297,7 +303,7 @@
     findingBody.innerHTML = `
       <div class="mb-2">
         <strong>类型：</strong> ${escapeHtml(f.type || '')}
-        　<strong>来源：</strong> ${f.detector === 'LLM' ? 'AI' : '规则'}
+        　<strong>来源：</strong> ${detectorLabel(f.detector)}
         ${f.mrIid ? `　<strong>MR：</strong> !${f.mrIid}` : ''}
       </div>
       <div class="mb-3"><strong>摘要：</strong> ${escapeHtml(f.summary || '')}</div>
