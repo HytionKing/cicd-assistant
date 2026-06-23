@@ -80,6 +80,36 @@ public class LlmPromptBuilder {
         return buildUserBase(filePath, baselineBranch, targetBranch, baseline, target, ruleFindings);
     }
 
+    /**
+     * HYBRID + MR 模式：复核 patch verifier 的发现。
+     * 给模型看的是 MR 的 patch（事实依据）和 target 当前文件，让它判断未命中是"真上线丢失"还是"等价改写/重构改名"。
+     */
+    public String buildUserForPatchReview(String filePath, Integer mrIid, String mrPatch,
+                                          String targetBranch, String targetContent,
+                                          List<CompareFinding> ruleFindings) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("文件: ").append(filePath).append("\n");
+        sb.append("MR: !").append(mrIid == null ? "?" : mrIid).append("\n\n");
+        sb.append("MR 引入的 patch（unified diff）：\n```diff\n").append(truncate(mrPatch)).append("\n```\n\n");
+        sb.append("目标分支 (").append(targetBranch).append(") 当前该文件内容：\n");
+        sb.append("```\n").append(truncate(targetContent)).append("\n```\n\n");
+        if (ruleFindings != null && !ruleFindings.isEmpty()) {
+            sb.append("规则校验器认为以下改动可能未在目标分支生效，请逐条判断它们是真正的上线丢失，")
+              .append("还是等价改写/重构改名等可接受情况：\n");
+            int i = 1;
+            for (CompareFinding f : ruleFindings) {
+                sb.append(i++).append(". [").append(f.getSeverity()).append("] ")
+                  .append(f.getType()).append(" — ").append(safeTitle(f.getSummary())).append("\n");
+                if (f.getBaselineSnippet() != null && !f.getBaselineSnippet().isEmpty()) {
+                    sb.append("   未命中样本：\n   ").append(f.getBaselineSnippet().replace("\n", "\n   ")).append("\n");
+                }
+            }
+            sb.append("\n");
+        }
+        sb.append("按 system 中指定的 JSON 格式返回。无任何真实风险时返回 {\"findings\":[]}。");
+        return sb.toString();
+    }
+
     private String buildUserBase(String filePath, String baselineBranch, String targetBranch,
                                  String baseline, String target,
                                  List<CompareFinding> ruleFindings) {

@@ -181,11 +181,30 @@ java -cp /tmp:target/classes:$(find ~/.m2 -name 'javaparser-core*.jar' -o -name 
 - 公司私服 Nexus URL：`http://10.0.80.56:8081/nexus/content/groups/public/`
 - 仓库示例：`gitlab.example.com/group/sub-group/.../service.git`
 
+## P3.x 增量：MR-Patch 驱动校验（✅ 已完成）
+
+为了规避"基准分支（fat）含未上线代码导致全是误报"的问题，引入了 patch verification 作为 MR 模式下的主路径：
+
+- `MrFileListFetcher.changesOf(repo, iid)` 返回 `List<MrFileChange>`（path + unified patch）
+- `PatchHunkVerifier` 把 patch 解析成 + 行 / − 行，按文件类型过滤噪音（import/单符号/注释/纯关闭标签），到 target 当前文件做规范化子串匹配
+  - 未命中的 + 行 → `MR_LINE_MISSING` ERROR/WARN（>=50% 未命中算 ERROR）
+  - 仍存在的 − 行 → `MR_LINE_LINGERING` INFO
+  - target 不存在该文件而 patch 全是新增 → `MR_FILE_MISSING` ERROR
+  - finding `detector=RULE_PATCH`，UI 徽章 "MR 验证"（青色）
+- `CompareEngine.runOneTarget` 改成三分支：
+  - RULE/HYBRID + 有 MR → patch verifier，fat 不读
+  - LLM → 不变（每文件丢给 LLM）
+  - RULE/HYBRID + 没选 MR → 退回老 file-differ，fat 作为 baseline 全量对比
+- HYBRID + MR 路径下，patch verifier 的 ERROR/WARN 会通过 `LlmPromptBuilder.buildUserForPatchReview` 送给 LLM 复核，让模型判断"未命中"是真上线丢失还是等价改写/重构改名
+- `GET /api/compare/config` 暴露 `mrFetchDefaultLimit/mrFetchMaxLimit/llmEnabled`，前端创建任务页：
+  - 新增 "每分支拉取 N 条" 输入（默认值来自配置，可在 1~100 间调）
+  - 勾了任意 MR 时，基准分支 label 会出现灰字 "(MR 模式下仅作上下文参照)"
+
 ## 当前状态
 
-- P1+P2+P3 已完成
+- P1+P2+P3 + MR-patch 验证已完成
 - 侧栏 2 级 collapse 已修好（之前用 dropdown-menu 嵌套 + 双 BS 监听都踩过）
-- P3 完成后下一步是 P4（钉钉真实推送）
+- 下一步是 P4（钉钉真实推送）
 
 ## 给新 agent 的工作守则
 

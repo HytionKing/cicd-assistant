@@ -33,6 +33,17 @@ public class CompareController {
         this.appProperties = appProperties;
     }
 
+    @GetMapping("/config")
+    public Map<String, Object> config() {
+        AppProperties.Compare cc = appProperties.getCompare();
+        AppProperties.Llm llm = cc.getLlm();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("mrFetchDefaultLimit", cc.getMrFetchDefaultLimit());
+        r.put("mrFetchMaxLimit", 100);
+        r.put("llmEnabled", llm.isEnabled() && llm.getBaseUrl() != null && !llm.getBaseUrl().trim().isEmpty());
+        return r;
+    }
+
     @GetMapping("/tasks")
     public Map<String, Object> listTasks(@RequestParam(defaultValue = "1") int page,
                                          @RequestParam(defaultValue = "20") int size) {
