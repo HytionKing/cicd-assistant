@@ -147,6 +147,19 @@
 .diff-box .diff-line.add { background: rgba(57, 138, 63, 0.32); }
 .diff-box .diff-line.del { background: rgba(196, 64, 64, 0.32); }
 .diff-box .diff-line.eq  { background: transparent; }
+
+/* patch verifier 的 hunk 头：@@ -10,7 +10,9 @@ public void update(...) — 末尾常带包围方法签名 */
+.diff-box .diff-hunk-header {
+    color: #a3c4ff;
+    background: rgba(80, 110, 180, 0.18);
+    padding: 2px 12px;
+    border-top: 1px solid #2c3a52;
+    border-bottom: 1px solid #2c3a52;
+    margin-top: 4px;
+    font-weight: 500;
+    white-space: pre;
+}
+.diff-box .diff-hunk-header:first-child { margin-top: 0; border-top: none; }
 .diff-box .diff-marker {
     flex: 0 0 auto;
     width: 1em;
