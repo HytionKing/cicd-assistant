@@ -99,18 +99,23 @@ public class CompareEngine {
             List<CompareContext> contexts = needsLlm(mode)
                     ? resolveContexts(task.getRepoId(), task.getContextIds())
                     : Collections.emptyList();
-            String systemPrompt = needsLlm(mode) ? promptBuilder.buildSystem(contexts) : null;
+            // 两套 system prompt：HYBRID + MR 走"patch 落地核验"版（强制 LLM 引用行号、独立核实）；
+            // LLM 独立模式 / 无 MR 全文件比对走老的整文件审计版。
+            String patchReviewSystem = needsLlm(mode)
+                    ? promptBuilder.buildSystemForPatchReview(contexts) : null;
+            String fileLevelSystem = needsLlm(mode)
+                    ? promptBuilder.buildSystem(contexts) : null;
 
             Counters c = new Counters();
             Set<String> scannedFiles = new LinkedHashSet<>();
 
             if (hasMrs && (mode.equals("RULE") || mode.equals("HYBRID"))) {
-                runMrPath(task, repo, target, mrIids, mode, systemPrompt, repoRoot, c, scannedFiles);
+                runMrPath(task, repo, target, mrIids, mode, patchReviewSystem, repoRoot, c, scannedFiles);
             } else if (mode.equals("LLM")) {
-                runLlmStandalone(task, repo, target, mrIids, systemPrompt, repoRoot, c, scannedFiles);
+                runLlmStandalone(task, repo, target, mrIids, fileLevelSystem, repoRoot, c, scannedFiles);
             } else {
                 // 无 MR 时的 RULE/HYBRID：退回老 file-differ 全量对比
-                runLegacyFileDiff(task, repo, target, mrIids, mode, systemPrompt, repoRoot, c, scannedFiles);
+                runLegacyFileDiff(task, repo, target, mrIids, mode, fileLevelSystem, repoRoot, c, scannedFiles);
             }
 
             target.setErrorCount(c.errors);
