@@ -34,6 +34,12 @@ public class PatchHunkVerifier {
     private static final int MIN_MATCH_LEN = 8;
     /** 单条 finding snippet 最多字符数。 */
     private static final int MAX_SNIPPET_CHARS = 6000;
+    /**
+     * 邻居"附近"的容忍半径：target 中 self 命中位置上下各看 N 行找 prev/next。
+     * 允许 target 在 MR 的相邻行间插入若干无关行（最常见的：env 又合了别的 MR，
+     * 在两个本 MR 新增的方法之间夹了第三方方法），不至于因此整段误报。
+     */
+    private static final int CONTEXT_WINDOW = 3;
 
     /** 行注释 / 单符号 / 闭合标签等噪音，所有语言通用。 */
     private static final Set<String> NOISE_LITERALS = new HashSet<>(Arrays.asList(
@@ -65,7 +71,7 @@ public class PatchHunkVerifier {
         List<HunkFlags> lingeringHunks = new ArrayList<>();
 
         for (Hunk h : parsed.hunks) {
-            // 统计 essential add/del 总数（用于摘要里的 "X/Y"）
+            // 先统计 essential add/del 总数，用于摘要里的 "X/Y"
             for (int i = 0; i < h.lines.size(); i++) {
                 String l = h.lines.get(i);
                 if (l.isEmpty()) continue;
@@ -82,25 +88,32 @@ public class PatchHunkVerifier {
             boolean[] delFlag = new boolean[h.lines.size()];
             boolean anyMiss = false, anyLinger = false;
 
-            // + 行：按连续段（run）匹配。block 不在 target → 整段标为 missing。
-            for (Run run : findRuns(h, '+')) {
-                Block block = collectEssentialBlock(h, run, ext);
-                if (block.lines.isEmpty()) continue;
-                String prevCtx = findPrevContext(h, run.start, ext);
-                String nextCtx = findNextContext(h, run.end, ext);
-                if (!containsBlockWithContext(targetLines, block.lines, prevCtx, nextCtx)) {
-                    for (int idx : block.indices) { addFlag[idx] = true; totalMissAdds++; }
+            // 逐行判定。每条 +/- 行用一个 3 行小窗口（prev + self + next）去 target 上找连续匹配。
+            // 这样不要求整段 MR 内容一次性 contiguous，避免"target 在 MR 加的方法之间插了别的代码"这种
+            // 完全合理的情况被全量误报。
+            for (int i = 0; i < h.lines.size(); i++) {
+                String l = h.lines.get(i);
+                if (l.isEmpty()) continue;
+                char c = l.charAt(0);
+                if (c != '+' && c != '-') continue;
+                String body = l.substring(1);
+                if (!isEssential(body, ext)) continue;
+                String self = normalizeLine(body);
+                if (self.length() < MIN_MATCH_LEN) continue;
+
+                String prev = neighborInView(h, i, -1, c, ext);
+                String next = neighborInView(h, i, +1, c, ext);
+                // 完全没有邻居 → 等价于"target 里有没有这一行"，对通用短句风险太大。保守跳过。
+                if (prev == null && next == null) continue;
+
+                boolean presentInTarget = matchSelfWithNearbyNeighbor(targetLines, self, prev, next);
+                if (c == '+' && !presentInTarget) {
+                    addFlag[i] = true;
+                    totalMissAdds++;
                     anyMiss = true;
-                }
-            }
-            // - 行对称：block 仍在 target 同样位置（上下文吻合） → 整段标为 lingering
-            for (Run run : findRuns(h, '-')) {
-                Block block = collectEssentialBlock(h, run, ext);
-                if (block.lines.isEmpty()) continue;
-                String prevCtx = findPrevContext(h, run.start, ext);
-                String nextCtx = findNextContext(h, run.end, ext);
-                if (containsBlockWithContext(targetLines, block.lines, prevCtx, nextCtx)) {
-                    for (int idx : block.indices) { delFlag[idx] = true; totalLingerDels++; }
+                } else if (c == '-' && presentInTarget) {
+                    delFlag[i] = true;
+                    totalLingerDels++;
                     anyLinger = true;
                 }
             }
@@ -142,11 +155,10 @@ public class PatchHunkVerifier {
         return out;
     }
 
-    // ---- block matching helpers ----
+    // ---- per-line match helpers ----
 
     /**
      * 把 target 文件折成"essential 规范化行列表"，过滤掉空行 / 单符号 / 注释等噪音。
-     * 后续 block 比对就在这个列表上做，避免被 target 里语义无关的行干扰。
      */
     private static List<String> essentialNormalizedLines(String content, String ext) {
         if (content == null) return java.util.Collections.emptyList();
@@ -160,49 +172,23 @@ public class PatchHunkVerifier {
         return out;
     }
 
-    private static List<Run> findRuns(Hunk h, char want) {
-        List<Run> out = new ArrayList<>();
-        int start = -1;
-        for (int i = 0; i < h.lines.size(); i++) {
+    /**
+     * 找 hunk 内某一行的"同侧视图"上最近的 essential 邻居。
+     * <ul>
+     *   <li>type = '+': 跳过 '-' 行（它们已删，不在 post-MR 文件里）；保留 '+'/' ' 行</li>
+     *   <li>type = '-': 跳过 '+' 行（它们尚未在 pre-MR 文件里）；保留 '-'/' ' 行</li>
+     * </ul>
+     * direction = -1 往前找，+1 往后找。
+     */
+    private static String neighborInView(Hunk h, int from, int direction, char type, String ext) {
+        int step = direction > 0 ? 1 : -1;
+        for (int i = from + step; i >= 0 && i < h.lines.size(); i += step) {
             String l = h.lines.get(i);
-            boolean isWant = !l.isEmpty() && l.charAt(0) == want;
-            if (isWant) { if (start < 0) start = i; }
-            else { if (start >= 0) { out.add(new Run(start, i - 1)); start = -1; } }
-        }
-        if (start >= 0) out.add(new Run(start, h.lines.size() - 1));
-        return out;
-    }
-
-    private static Block collectEssentialBlock(Hunk h, Run run, String ext) {
-        Block b = new Block();
-        for (int i = run.start; i <= run.end; i++) {
-            String body = h.lines.get(i).substring(1);
-            if (!isEssential(body, ext)) continue;
-            String norm = normalizeLine(body);
-            if (norm.length() < MIN_MATCH_LEN) continue;
-            b.lines.add(norm);
-            b.indices.add(i);
-        }
-        return b;
-    }
-
-    private static String findPrevContext(Hunk h, int from, String ext) {
-        for (int i = from - 1; i >= 0; i--) {
-            String l = h.lines.get(i);
-            if (l.isEmpty() || l.charAt(0) != ' ') continue;
-            String body = l.substring(1);
-            if (!isEssential(body, ext)) continue;
-            String norm = normalizeLine(body);
-            if (norm.length() < MIN_MATCH_LEN) continue;
-            return norm;
-        }
-        return null;
-    }
-
-    private static String findNextContext(Hunk h, int from, String ext) {
-        for (int i = from + 1; i < h.lines.size(); i++) {
-            String l = h.lines.get(i);
-            if (l.isEmpty() || l.charAt(0) != ' ') continue;
+            if (l.isEmpty()) continue;
+            char c = l.charAt(0);
+            if (c != '+' && c != '-' && c != ' ') continue;
+            if (type == '+' && c == '-') continue;
+            if (type == '-' && c == '+') continue;
             String body = l.substring(1);
             if (!isEssential(body, ext)) continue;
             String norm = normalizeLine(body);
@@ -213,51 +199,34 @@ public class PatchHunkVerifier {
     }
 
     /**
-     * 在 target essential-line 序列里找 block。
-     * <ul>
-     *   <li>block 长度 ≥ 3：连续匹配本身已经是强信号，直接接受</li>
-     *   <li>block 长度 1~2 且 hunk 有上下文：至少 prev/next 之一在 target 紧邻处吻合才算</li>
-     *   <li>block 长度 1~2 且 hunk 没有上下文（罕见，如 hunk 在文件首尾）：退回到 block-only</li>
-     * </ul>
-     * 这是为了过滤"target 别处碰巧有同样一行（如 return null;）"的假命中。
+     * 判定"self 这一行是否在 target 里以原本上下文存在"。
+     *
+     * <p>规则：在 target essential-line 序列里找所有命中 self 的位置 k；只要任一命中位置上
+     * prev 出现在 target[k-CONTEXT_WINDOW .. k-1] 之中，或 next 出现在 target[k+1 .. k+CONTEXT_WINDOW]
+     * 之中，就认定 self 在原始上下文里出现过。</p>
+     *
+     * <p>±N 而不是严格紧邻：env 可能在 MR 改动行之间插入了来自别的 MR 的代码（再常见不过的场景），
+     * 不能因此把 self 判为缺失。N=3 容忍 2 行无关插入。</p>
      */
-    private static boolean containsBlockWithContext(List<String> target, List<String> block,
-                                                    String prevCtx, String nextCtx) {
-        if (block.isEmpty()) return false;
-        int m = block.size();
+    private static boolean matchSelfWithNearbyNeighbor(List<String> target, String self,
+                                                       String prev, String next) {
         int n = target.size();
-        if (m > n) return false;
-        boolean hasCtx = (prevCtx != null) || (nextCtx != null);
-        outer:
-        for (int i = 0; i + m <= n; i++) {
-            for (int j = 0; j < m; j++) {
-                if (!target.get(i + j).equals(block.get(j))) continue outer;
+        for (int k = 0; k < n; k++) {
+            if (!target.get(k).equals(self)) continue;
+            if (prev != null) {
+                int from = Math.max(0, k - CONTEXT_WINDOW);
+                for (int j = from; j < k; j++) {
+                    if (target.get(j).equals(prev)) return true;
+                }
             }
-            // 命中位置 i..i+m-1
-            if (m >= 3 || !hasCtx) return true;
-            boolean prevOk = false, nextOk = false;
-            if (prevCtx != null) {
-                if (i > 0 && target.get(i - 1).equals(prevCtx)) prevOk = true;
-                else if (i > 1 && target.get(i - 2).equals(prevCtx)) prevOk = true;
+            if (next != null) {
+                int to = Math.min(n - 1, k + CONTEXT_WINDOW);
+                for (int j = k + 1; j <= to; j++) {
+                    if (target.get(j).equals(next)) return true;
+                }
             }
-            if (nextCtx != null) {
-                int after = i + m;
-                if (after < n && target.get(after).equals(nextCtx)) nextOk = true;
-                else if (after + 1 < n && target.get(after + 1).equals(nextCtx)) nextOk = true;
-            }
-            if (prevOk || nextOk) return true;
         }
         return false;
-    }
-
-    private static class Run {
-        final int start, end;
-        Run(int s, int e) { start = s; end = e; }
-    }
-
-    private static class Block {
-        final List<String> lines = new ArrayList<>();
-        final List<Integer> indices = new ArrayList<>();
     }
 
     private static String severityForMissing(int total, int missing) {
