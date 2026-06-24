@@ -11,6 +11,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * MR-Patch 驱动的"上线一致性"校验器。
@@ -65,12 +67,20 @@ public class PatchHunkVerifier {
         String ext = extOf(filePath);
         List<String> targetLines = essentialNormalizedLines(targetContent, ext);
 
+        // M1: 跨整个 patch 收集所有 + 行的规范化集合。如果一条 - 行的字面也在 + 集合里
+        // （MR 同时删又加，最典型场景是成员变量/import 调换顺序、方法移位），就是 move 不是 delete，
+        // lingering 检查直接放过 —— 否则 target 上必然能找到等价行，全部假阳性。
+        Set<String> addedSet = collectAddedLines(parsed, ext);
+
         int totalEssAdds = 0, totalMissAdds = 0;
         int totalEssDels = 0, totalLingerDels = 0;
         List<HunkFlags> missingHunks = new ArrayList<>();
         List<HunkFlags> lingeringHunks = new ArrayList<>();
 
         for (Hunk h : parsed.hunks) {
+            // M2: 取 hunk 的"语法 scope"作为 lingering 锚点。
+            // 优先 git 在 @@ 头里塞的 xfuncname suffix；不行则向 hunk 上文回走找 structural 行。
+            String hunkScope = hunkScopeHint(h, ext);
             // 先统计 essential add/del 总数，用于摘要里的 "X/Y"
             for (int i = 0; i < h.lines.size(); i++) {
                 String l = h.lines.get(i);
@@ -106,15 +116,25 @@ public class PatchHunkVerifier {
                 // 完全没有邻居 → 等价于"target 里有没有这一行"，对通用短句风险太大。保守跳过。
                 if (prev == null && next == null) continue;
 
-                boolean presentInTarget = matchSelfWithNearbyNeighbor(targetLines, self, prev, next);
-                if (c == '+' && !presentInTarget) {
-                    addFlag[i] = true;
-                    totalMissAdds++;
-                    anyMiss = true;
-                } else if (c == '-' && presentInTarget) {
-                    delFlag[i] = true;
-                    totalLingerDels++;
-                    anyLinger = true;
+                if (c == '+') {
+                    boolean presentInTarget = matchSelfWithNearbyNeighbor(
+                            targetLines, self, prev, next, /*requireScope=*/ null, ext);
+                    if (!presentInTarget) {
+                        addFlag[i] = true;
+                        totalMissAdds++;
+                        anyMiss = true;
+                    }
+                } else { // c == '-'
+                    // M1: 同一 patch 内被加回去 → move，不算 lingering
+                    if (addedSet.contains(self)) continue;
+                    // M2: 锚定到 hunk 的 scope；target 上命中位置必须在同一 scope 才算 lingering
+                    boolean presentInTarget = matchSelfWithNearbyNeighbor(
+                            targetLines, self, prev, next, hunkScope, ext);
+                    if (presentInTarget) {
+                        delFlag[i] = true;
+                        totalLingerDels++;
+                        anyLinger = true;
+                    }
                 }
             }
 
@@ -209,24 +229,126 @@ public class PatchHunkVerifier {
      * 不能因此把 self 判为缺失。N=3 容忍 2 行无关插入。</p>
      */
     private static boolean matchSelfWithNearbyNeighbor(List<String> target, String self,
-                                                       String prev, String next) {
+                                                       String prev, String next,
+                                                       String requireScope, String ext) {
         int n = target.size();
         for (int k = 0; k < n; k++) {
             if (!target.get(k).equals(self)) continue;
+            boolean nbOk = false;
             if (prev != null) {
                 int from = Math.max(0, k - CONTEXT_WINDOW);
                 for (int j = from; j < k; j++) {
-                    if (target.get(j).equals(prev)) return true;
+                    if (target.get(j).equals(prev)) { nbOk = true; break; }
                 }
             }
-            if (next != null) {
+            if (!nbOk && next != null) {
                 int to = Math.min(n - 1, k + CONTEXT_WINDOW);
                 for (int j = k + 1; j <= to; j++) {
-                    if (target.get(j).equals(next)) return true;
+                    if (target.get(j).equals(next)) { nbOk = true; break; }
                 }
             }
+            if (!nbOk) continue;
+
+            // M2: 要求 target 命中位置回走能找到的 scope 与 hunk 的 scope 一致；
+            //     识别不出（如 plain text 文件）则不强卡。
+            if (requireScope != null && !requireScope.isEmpty()) {
+                String scopeHere = enclosingScopeInTarget(target, k, ext);
+                if (scopeHere != null && !scopeHere.isEmpty() && !requireScope.equals(scopeHere)) {
+                    continue;
+                }
+            }
+            return true;
         }
         return false;
+    }
+
+    // ---- M1: 同 patch 内被加回去的行视为 move，不算 lingering ----
+
+    private static Set<String> collectAddedLines(ParsedPatch parsed, String ext) {
+        Set<String> out = new HashSet<>();
+        for (Hunk h : parsed.hunks) {
+            for (String l : h.lines) {
+                if (l.isEmpty() || l.charAt(0) != '+') continue;
+                String body = l.substring(1);
+                if (!isEssential(body, ext)) continue;
+                String norm = normalizeLine(body);
+                if (norm.length() < MIN_MATCH_LEN) continue;
+                out.add(norm);
+            }
+        }
+        return out;
+    }
+
+    // ---- M2: scope 锚定 ----
+
+    private static String hunkScopeHint(Hunk h, String ext) {
+        if (h.header != null) {
+            int idx = h.header.indexOf("@@", 2);
+            if (idx >= 0) {
+                String s = identifyScope(h.header.substring(idx + 2), ext);
+                if (s != null) return s;
+            }
+        }
+        for (int i = h.lines.size() - 1; i >= 0; i--) {
+            String l = h.lines.get(i);
+            if (l.isEmpty()) continue;
+            char c = l.charAt(0);
+            if (c == '+') continue;       // pre-MR 视图跳过 +
+            String body = (c == '-' || c == ' ') ? l.substring(1) : l;
+            String s = identifyScope(body, ext);
+            if (s != null) return s;
+        }
+        return null;
+    }
+
+    private static String enclosingScopeInTarget(List<String> target, int from, String ext) {
+        int limit = Math.max(0, from - 300);
+        for (int i = from; i >= limit; i--) {
+            String s = identifyScope(target.get(i), ext);
+            if (s != null) return s;
+        }
+        return null;
+    }
+
+    private static final Pattern JAVA_TYPE = Pattern.compile("\\b(class|interface|enum|record)\\s+(\\w+)");
+    private static final Pattern JAVA_METHOD = Pattern.compile("\\b(\\w+)\\s*\\([^)]*\\)\\s*(throws[^{]*)?\\s*\\{?\\s*$");
+    private static final Pattern JAVA_MODIFIER = Pattern.compile(
+            "\\b(public|private|protected|static|final|abstract|default|synchronized|native)\\b");
+    private static final Pattern XML_SQL_TAG = Pattern.compile(
+            "<(select|insert|update|delete|sql|resultMap)\\b[^>]*\\bid\\s*=\\s*\"([^\"]+)\"");
+    private static final Pattern SQL_DDL = Pattern.compile(
+            "(?i)\\b(create|alter|drop)\\s+(table|view|index|procedure|function)\\s+(\\w+)");
+    private static final Set<String> JAVA_NON_METHOD_KEYWORDS = new HashSet<>(Arrays.asList(
+            "if", "for", "while", "switch", "catch", "return", "new", "throw", "do"));
+
+    private static String identifyScope(String line, String ext) {
+        if (line == null) return null;
+        String t = line.trim();
+        if (t.isEmpty()) return null;
+        if ("java".equals(ext)) {
+            Matcher c = JAVA_TYPE.matcher(t);
+            if (c.find()) return "type:" + c.group(2);
+            // 方法签名启发式：带 modifier + ( + 非控制流关键字
+            if (t.contains("(") && JAVA_MODIFIER.matcher(t).find()) {
+                Matcher m = JAVA_METHOD.matcher(t);
+                if (m.find()) {
+                    String name = m.group(1);
+                    if (!JAVA_NON_METHOD_KEYWORDS.contains(name)) return "method:" + name;
+                }
+            }
+            return null;
+        }
+        if ("xml".equals(ext)) {
+            Matcher m = XML_SQL_TAG.matcher(t);
+            if (m.find()) return m.group(1).toLowerCase() + ":" + m.group(2);
+            return null;
+        }
+        if ("sql".equals(ext)) {
+            Matcher m = SQL_DDL.matcher(t);
+            if (m.find()) return m.group(2).toLowerCase() + ":" + m.group(3).toLowerCase();
+            return null;
+        }
+        return null;
     }
 
     private static String severityForMissing(int total, int missing) {
