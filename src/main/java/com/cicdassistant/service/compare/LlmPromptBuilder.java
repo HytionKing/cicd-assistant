@@ -74,16 +74,11 @@ public class LlmPromptBuilder {
         sb.append("- 若目标视图窗口未覆盖相关区域（patch 改动的位置不在窗口里），必须说明：\n");
         sb.append("    severity = INFO；summary 以「视图未覆盖」开头；comment 注明 \"提供的目标分支片段未覆盖相关区域，无法核验\"。\n\n");
 
-        sb.append("【对规则结论的态度】\n");
-        sb.append("用户可能在 user prompt 末尾附了规则校验器的怀疑点。它的算法是行级模糊匹配，会有较多误报。\n");
-        sb.append("规则结论仅供线索，不可照搬。你必须独立核验。若判定规则误报，请单独输出一条 finding：\n");
-        sb.append("  severity = INFO；summary 以「AI 否决：」开头；comment 写「规则报 XXX，实际在目标分支第 N 行已存在/已正确删除」。\n\n");
-
         appendContexts(sb, contexts);
 
         sb.append("【输出格式】\n");
         sb.append("返回 JSON 对象 {\"findings\":[{severity, summary, comment}]}。\n");
-        sb.append("severity ∈ {ERROR, WARN, INFO}。无任何风险且无规则可否决时返回 {\"findings\":[]}。\n");
+        sb.append("severity ∈ {ERROR, WARN, INFO}。无任何风险时返回 {\"findings\":[]}。\n");
         sb.append("不要 markdown 代码块包裹，不要解释文字。");
         return sb.toString();
     }
@@ -135,6 +130,9 @@ public class LlmPromptBuilder {
                 }
             }
             sb.append("\n");
+            sb.append("对上面规则结论的处理方式：你必须独立核验，不要照搬。若判定某条规则误报，请单独输出一条 finding：\n");
+            sb.append("  severity = INFO；summary 以「AI 否决：」开头；\n");
+            sb.append("  comment 写「规则报 XXX，实际在目标分支第 N 行已存在/已正确删除/属于等价改写」。\n\n");
         }
         sb.append("请按 system 中规定的判定步骤逐条核实，输出 JSON。");
         return sb.toString();
