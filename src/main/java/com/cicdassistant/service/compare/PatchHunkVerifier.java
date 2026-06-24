@@ -57,45 +57,54 @@ public class PatchHunkVerifier {
         }
 
         String ext = extOf(filePath);
-        String normTarget = normalizeForSearch(targetContent == null ? "" : targetContent);
+        List<String> targetLines = essentialNormalizedLines(targetContent, ext);
 
-        // 给每个 hunk 算出"哪些行（按行索引）是未命中 add / 漏删 del"，方便前端高亮定位
         int totalEssAdds = 0, totalMissAdds = 0;
         int totalEssDels = 0, totalLingerDels = 0;
         List<HunkFlags> missingHunks = new ArrayList<>();
         List<HunkFlags> lingeringHunks = new ArrayList<>();
 
         for (Hunk h : parsed.hunks) {
-            boolean[] addFlag = new boolean[h.lines.size()];
-            boolean[] delFlag = new boolean[h.lines.size()];
-            boolean anyMiss = false, anyLinger = false;
+            // 统计 essential add/del 总数（用于摘要里的 "X/Y"）
             for (int i = 0; i < h.lines.size(); i++) {
                 String l = h.lines.get(i);
                 if (l.isEmpty()) continue;
                 char c = l.charAt(0);
                 String body = l.substring(1);
-                if (c == '+') {
-                    if (!isEssential(body, ext)) continue;
-                    totalEssAdds++;
-                    String norm = normalizeLine(body);
-                    if (norm.length() < MIN_MATCH_LEN) continue;
-                    if (!normTarget.contains(norm)) {
-                        addFlag[i] = true;
-                        anyMiss = true;
-                        totalMissAdds++;
-                    }
-                } else if (c == '-') {
-                    if (!isEssential(body, ext)) continue;
-                    totalEssDels++;
-                    String norm = normalizeLine(body);
-                    if (norm.length() < MIN_MATCH_LEN) continue;
-                    if (normTarget.contains(norm)) {
-                        delFlag[i] = true;
-                        anyLinger = true;
-                        totalLingerDels++;
-                    }
+                if (!isEssential(body, ext)) continue;
+                String norm = normalizeLine(body);
+                if (norm.length() < MIN_MATCH_LEN) continue;
+                if (c == '+') totalEssAdds++;
+                else if (c == '-') totalEssDels++;
+            }
+
+            boolean[] addFlag = new boolean[h.lines.size()];
+            boolean[] delFlag = new boolean[h.lines.size()];
+            boolean anyMiss = false, anyLinger = false;
+
+            // + 行：按连续段（run）匹配。block 不在 target → 整段标为 missing。
+            for (Run run : findRuns(h, '+')) {
+                Block block = collectEssentialBlock(h, run, ext);
+                if (block.lines.isEmpty()) continue;
+                String prevCtx = findPrevContext(h, run.start, ext);
+                String nextCtx = findNextContext(h, run.end, ext);
+                if (!containsBlockWithContext(targetLines, block.lines, prevCtx, nextCtx)) {
+                    for (int idx : block.indices) { addFlag[idx] = true; totalMissAdds++; }
+                    anyMiss = true;
                 }
             }
+            // - 行对称：block 仍在 target 同样位置（上下文吻合） → 整段标为 lingering
+            for (Run run : findRuns(h, '-')) {
+                Block block = collectEssentialBlock(h, run, ext);
+                if (block.lines.isEmpty()) continue;
+                String prevCtx = findPrevContext(h, run.start, ext);
+                String nextCtx = findNextContext(h, run.end, ext);
+                if (containsBlockWithContext(targetLines, block.lines, prevCtx, nextCtx)) {
+                    for (int idx : block.indices) { delFlag[idx] = true; totalLingerDels++; }
+                    anyLinger = true;
+                }
+            }
+
             if (anyMiss) missingHunks.add(new HunkFlags(h, addFlag, null));
             if (anyLinger) lingeringHunks.add(new HunkFlags(h, null, delFlag));
         }
@@ -131,6 +140,124 @@ public class PatchHunkVerifier {
                     formatHunksWithFlags(lingeringHunks)));
         }
         return out;
+    }
+
+    // ---- block matching helpers ----
+
+    /**
+     * 把 target 文件折成"essential 规范化行列表"，过滤掉空行 / 单符号 / 注释等噪音。
+     * 后续 block 比对就在这个列表上做，避免被 target 里语义无关的行干扰。
+     */
+    private static List<String> essentialNormalizedLines(String content, String ext) {
+        if (content == null) return java.util.Collections.emptyList();
+        List<String> out = new ArrayList<>();
+        for (String l : content.split("\\r?\\n", -1)) {
+            if (!isEssential(l, ext)) continue;
+            String norm = normalizeLine(l);
+            if (norm.isEmpty()) continue;
+            out.add(norm);
+        }
+        return out;
+    }
+
+    private static List<Run> findRuns(Hunk h, char want) {
+        List<Run> out = new ArrayList<>();
+        int start = -1;
+        for (int i = 0; i < h.lines.size(); i++) {
+            String l = h.lines.get(i);
+            boolean isWant = !l.isEmpty() && l.charAt(0) == want;
+            if (isWant) { if (start < 0) start = i; }
+            else { if (start >= 0) { out.add(new Run(start, i - 1)); start = -1; } }
+        }
+        if (start >= 0) out.add(new Run(start, h.lines.size() - 1));
+        return out;
+    }
+
+    private static Block collectEssentialBlock(Hunk h, Run run, String ext) {
+        Block b = new Block();
+        for (int i = run.start; i <= run.end; i++) {
+            String body = h.lines.get(i).substring(1);
+            if (!isEssential(body, ext)) continue;
+            String norm = normalizeLine(body);
+            if (norm.length() < MIN_MATCH_LEN) continue;
+            b.lines.add(norm);
+            b.indices.add(i);
+        }
+        return b;
+    }
+
+    private static String findPrevContext(Hunk h, int from, String ext) {
+        for (int i = from - 1; i >= 0; i--) {
+            String l = h.lines.get(i);
+            if (l.isEmpty() || l.charAt(0) != ' ') continue;
+            String body = l.substring(1);
+            if (!isEssential(body, ext)) continue;
+            String norm = normalizeLine(body);
+            if (norm.length() < MIN_MATCH_LEN) continue;
+            return norm;
+        }
+        return null;
+    }
+
+    private static String findNextContext(Hunk h, int from, String ext) {
+        for (int i = from + 1; i < h.lines.size(); i++) {
+            String l = h.lines.get(i);
+            if (l.isEmpty() || l.charAt(0) != ' ') continue;
+            String body = l.substring(1);
+            if (!isEssential(body, ext)) continue;
+            String norm = normalizeLine(body);
+            if (norm.length() < MIN_MATCH_LEN) continue;
+            return norm;
+        }
+        return null;
+    }
+
+    /**
+     * 在 target essential-line 序列里找 block。
+     * <ul>
+     *   <li>block 长度 ≥ 3：连续匹配本身已经是强信号，直接接受</li>
+     *   <li>block 长度 1~2 且 hunk 有上下文：至少 prev/next 之一在 target 紧邻处吻合才算</li>
+     *   <li>block 长度 1~2 且 hunk 没有上下文（罕见，如 hunk 在文件首尾）：退回到 block-only</li>
+     * </ul>
+     * 这是为了过滤"target 别处碰巧有同样一行（如 return null;）"的假命中。
+     */
+    private static boolean containsBlockWithContext(List<String> target, List<String> block,
+                                                    String prevCtx, String nextCtx) {
+        if (block.isEmpty()) return false;
+        int m = block.size();
+        int n = target.size();
+        if (m > n) return false;
+        boolean hasCtx = (prevCtx != null) || (nextCtx != null);
+        outer:
+        for (int i = 0; i + m <= n; i++) {
+            for (int j = 0; j < m; j++) {
+                if (!target.get(i + j).equals(block.get(j))) continue outer;
+            }
+            // 命中位置 i..i+m-1
+            if (m >= 3 || !hasCtx) return true;
+            boolean prevOk = false, nextOk = false;
+            if (prevCtx != null) {
+                if (i > 0 && target.get(i - 1).equals(prevCtx)) prevOk = true;
+                else if (i > 1 && target.get(i - 2).equals(prevCtx)) prevOk = true;
+            }
+            if (nextCtx != null) {
+                int after = i + m;
+                if (after < n && target.get(after).equals(nextCtx)) nextOk = true;
+                else if (after + 1 < n && target.get(after + 1).equals(nextCtx)) nextOk = true;
+            }
+            if (prevOk || nextOk) return true;
+        }
+        return false;
+    }
+
+    private static class Run {
+        final int start, end;
+        Run(int s, int e) { start = s; end = e; }
+    }
+
+    private static class Block {
+        final List<String> lines = new ArrayList<>();
+        final List<Integer> indices = new ArrayList<>();
     }
 
     private static String severityForMissing(int total, int missing) {
@@ -296,13 +423,6 @@ public class PatchHunkVerifier {
     static String normalizeLine(String s) {
         if (s == null) return "";
         return s.trim().replaceAll("\\s+", " ");
-    }
-
-    /** 把目标文件整体折叠成连续单空格的大字符串，用于 contains 子串匹配。 */
-    static String normalizeForSearch(String content) {
-        if (content == null) return "";
-        // 不区分行边界：MR 的某行重新折行后，target 上可能跨多行；折叠后还能匹配
-        return content.replaceAll("\\s+", " ").trim();
     }
 
     private static String extOf(String path) {
