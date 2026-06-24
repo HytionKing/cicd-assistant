@@ -32,6 +32,11 @@ public class LlmPromptBuilder {
     private static final int MAX_TARGET_VIEW_CHARS = 20000;
     /** 每个 hunk 在 target 上下各取 N 行作为审阅窗口。 */
     private static final int TARGET_WINDOW_LINES = 30;
+    /**
+     * 三明治 prompt 中 source + target 完整文件合计字符上限。超过这个就降级到窗口化两份。
+     * 32K 上下文，留 system ~3K / patch ~8K / 响应 4K 后大致剩 17K 给两份文件。
+     */
+    private static final int MAX_THREE_WAY_BOTH_FULL_CHARS = 17000;
 
     /** 老的整文件比对场景 system prompt。runLlmStandalone / runLegacyFileDiff 仍走它。 */
     public String buildSystem(List<CompareContext> contexts) {
@@ -92,6 +97,98 @@ public class LlmPromptBuilder {
                                      String baseline, String target,
                                      List<CompareFinding> ruleFindings) {
         return buildUserBase(filePath, baselineBranch, targetBranch, baseline, target, ruleFindings);
+    }
+
+    /**
+     * 三明治 prompt：patch + 源分支同文件全文 + 目标分支同文件全文。
+     *
+     * <p>给 LLM 三份信息：</p>
+     * <ul>
+     *   <li>patch —— 这次 MR 改了什么（意图）</li>
+     *   <li>源分支版本 —— "应该长成什么样"（feat 分支的最终态）</li>
+     *   <li>目标分支版本 —— "现在 env 长成什么样"（实际态）</li>
+     * </ul>
+     *
+     * <p>Token 预算：两份文件合起来 ≤ {@value #MAX_THREE_WAY_BOTH_FULL_CHARS} 字符就都塞全文带行号；
+     * 超了就降级到 patch + env 窗口（沿用 {@link #buildUserForPatchReview}）。</p>
+     *
+     * <p>source 读不到（分支已删 / API 失败）时也透明降级到 patch + env 窗口。</p>
+     *
+     * <p>ruleFindings 非空（HYBRID）→ 末尾追加规则结论 + "AI 否决"协议；为空（纯 LLM 模式）→ 不出现规则段。</p>
+     */
+    public String buildUserForThreeWayReview(String filePath, Integer mrIid, String mrPatch,
+                                             String sourceBranch, String sourceContent,
+                                             String targetBranch, String targetContent,
+                                             List<CompareFinding> ruleFindings) {
+        // 没有 source 可用 → 直接走原 patch+target 窗口路径
+        if (sourceBranch == null || sourceBranch.isEmpty()
+                || sourceContent == null || sourceContent.isEmpty()) {
+            return buildUserForPatchReview(filePath, mrIid, mrPatch, targetBranch, targetContent, ruleFindings);
+        }
+
+        int srcLen = sourceContent.length();
+        int tgtLen = targetContent == null ? 0 : targetContent.length();
+        boolean fitsBothFull = (srcLen + tgtLen) <= MAX_THREE_WAY_BOTH_FULL_CHARS;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("文件: ").append(filePath).append("\n");
+        sb.append("MR: !").append(mrIid == null ? "?" : mrIid).append("\n\n");
+
+        sb.append("【MR 引入的 patch（unified diff）—— 表达「这次改动的意图」】\n");
+        sb.append("```diff\n").append(truncate(mrPatch, MAX_PATCH_CHARS)).append("\n```\n\n");
+
+        if (fitsBothFull) {
+            sb.append("【源分支 ").append(sourceBranch).append(" 上该文件 —— 「MR 完成后该文件应该长成的样子」（带行号）】\n");
+            sb.append("```\n").append(renderWithLineNumbers(sourceContent)).append("\n```\n\n");
+            sb.append("【目标分支 ").append(targetBranch).append(" 当前该文件 —— 「实际合到 env 上的样子」（带行号）】\n");
+            sb.append("```\n")
+              .append(targetContent == null ? "(文件不存在)" : renderWithLineNumbers(targetContent))
+              .append("\n```\n\n");
+        } else {
+            // 文件太大，两份各开 patch 窗口
+            sb.append("【源分支 ").append(sourceBranch).append(" 上该文件相关行（带行号，按 patch @@ 位置 ±")
+              .append(TARGET_WINDOW_LINES).append(" 行）】\n");
+            sb.append("```\n").append(renderTargetWindows(mrPatch, sourceContent)).append("\n```\n\n");
+            sb.append("【目标分支 ").append(targetBranch).append(" 当前该文件相关行（带行号，按 patch @@ 位置 ±")
+              .append(TARGET_WINDOW_LINES).append(" 行）】\n");
+            sb.append("```\n").append(renderTargetWindows(mrPatch, targetContent)).append("\n```\n\n");
+            sb.append("（注：源文件 ").append(srcLen).append(" 字符 + 目标文件 ").append(tgtLen)
+              .append(" 字符超过 ").append(MAX_THREE_WAY_BOTH_FULL_CHARS).append(" 字符上限，已自动降级到窗口视图。）\n\n");
+        }
+
+        if (ruleFindings != null && !ruleFindings.isEmpty()) {
+            sb.append("【规则校验器的怀疑点（仅供线索；规则按行级模糊匹配会误报，请独立到目标视图里核实）】\n");
+            int i = 1;
+            for (CompareFinding f : ruleFindings) {
+                sb.append(i++).append(". [").append(f.getSeverity()).append("] ")
+                  .append(f.getType()).append(" — ").append(safeTitle(f.getSummary())).append("\n");
+                if (f.getBaselineSnippet() != null && !f.getBaselineSnippet().isEmpty()) {
+                    sb.append("   规则标记的片段：\n   ")
+                      .append(truncate(f.getBaselineSnippet(), 800).replace("\n", "\n   ")).append("\n");
+                }
+            }
+            sb.append("\n");
+            sb.append("对上面规则结论的处理方式：你必须独立核验，不要照搬。若判定某条规则误报，请单独输出一条 finding：\n");
+            sb.append("  severity = INFO；summary 以「AI 否决：」开头；\n");
+            sb.append("  comment 写「规则报 XXX，实际在目标分支第 N 行已存在/已正确删除/属于等价改写」。\n\n");
+        }
+
+        sb.append("请核实目标分支是否完整实现了源分支版本的所有内容（容忍等价改写、同义重构、字段重命名等），")
+          .append("按 system 中规定的判定步骤逐条核实，输出 JSON。");
+        return sb.toString();
+    }
+
+    /** 把整文件加上行号前缀输出，用于三明治模式塞完整文件场景。 */
+    String renderWithLineNumbers(String content) {
+        if (content == null || content.isEmpty()) return "(文件不存在)";
+        String[] lines = content.split("\\r?\\n", -1);
+        int total = lines.length;
+        int width = String.valueOf(total).length();
+        StringBuilder sb = new StringBuilder(content.length() + total * (width + 3));
+        for (int i = 0; i < total; i++) {
+            sb.append(String.format("%" + width + "d| %s%n", i + 1, lines[i]));
+        }
+        return sb.toString();
     }
 
     /**

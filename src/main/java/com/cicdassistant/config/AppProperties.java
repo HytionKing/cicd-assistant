@@ -39,7 +39,7 @@ public class AppProperties {
         private String apiKey = "";
         private String model = "qwen2.5-coder-32b-instruct";
         private int timeoutSeconds = 120;
-        private int maxTokens = 4096;
+        private int maxTokens = 8192;
     }
 
     @Data
