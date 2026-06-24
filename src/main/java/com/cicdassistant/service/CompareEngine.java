@@ -111,7 +111,11 @@ public class CompareEngine {
 
             if (hasMrs && (mode.equals("RULE") || mode.equals("HYBRID"))) {
                 runMrPath(task, repo, target, mrIids, mode, patchReviewSystem, repoRoot, c, scannedFiles);
+            } else if (mode.equals("LLM") && hasMrs) {
+                // 纯 LLM 模式 + 有 MR：走 patch 驱动（HYBRID 同款）但不带规则结论。fat 不参与。
+                runLlmOnPatch(task, repo, target, mrIids, patchReviewSystem, repoRoot, c, scannedFiles);
             } else if (mode.equals("LLM")) {
+                // LLM + 没选 MR：唯一选择是 fat ↔ env 整文件比对（兜底，老逻辑）
                 runLlmStandalone(task, repo, target, mrIids, fileLevelSystem, repoRoot, c, scannedFiles);
             } else {
                 // 无 MR 时的 RULE/HYBRID：退回老 file-differ 全量对比
@@ -167,7 +171,38 @@ public class CompareEngine {
         }
     }
 
-    /** 纯 LLM：跳过 differ，每个 MR 涉及文件（或退回到 0 文件）直接喂模型。 */
+    /**
+     * 纯 LLM + 有 MR：和 HYBRID 同样的"patch 驱动"路径，但不跑规则、不把规则结论喂给模型。
+     * 给 LLM 的只有：MR 的 patch + target 的窗口化视图，让它独立判断每条 +/− 是否生效。
+     * fat（baseline）完全不读，彻底规避"fat 上未上线代码污染 prompt"的老问题。
+     */
+    private void runLlmOnPatch(CompareTask task, Repo repo, CompareTarget target, List<Integer> mrIids,
+                               String systemPrompt, File repoRoot,
+                               Counters c, Set<String> scannedFiles) throws InterruptedException {
+        if (!llmClient.isReady()) {
+            log.warn("[COMPARE#{}] target={} LLM not ready, skipping",
+                    task.getId(), target.getTargetBranch());
+            return;
+        }
+        for (Integer mrIid : mrIids) {
+            List<MrFileChange> changes = mrFiles.changesOf(repo, mrIid);
+            log.info("[COMPARE#{}] target={} MR !{} (LLM-only) touches {} files",
+                    task.getId(), target.getTargetBranch(), mrIid, changes.size());
+            for (MrFileChange ch : changes) {
+                String path = ch.getPath();
+                String tgt = git.readFile(repoRoot, target.getTargetBranch(), path);
+                scannedFiles.add(path);
+                // 不传 ruleFindings —— buildUserForPatchReview 会跳过"规则怀疑点"段落，
+                // LLM 独立按 system prompt 里的判定步骤核实
+                String userPrompt = promptBuilder.buildUserForPatchReview(
+                        path, mrIid, ch.getPatch(), target.getTargetBranch(), tgt, null);
+                List<CompareFinding> fs = llmClient.evaluate(path, systemPrompt, userPrompt);
+                persistAll(fs, target, mrIid, c);
+            }
+        }
+    }
+
+    /** 纯 LLM + 没选 MR 的兜底：fat ↔ env 整文件比对（带 fat 未上线代码污染的老路径）。 */
     private void runLlmStandalone(CompareTask task, Repo repo, CompareTarget target, List<Integer> mrIids,
                                   String systemPrompt, File repoRoot,
                                   Counters c, Set<String> scannedFiles) throws InterruptedException {
