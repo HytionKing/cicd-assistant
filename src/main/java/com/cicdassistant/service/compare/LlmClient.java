@@ -147,13 +147,61 @@ public class LlmClient {
             JsonNode root = mapper.readTree(raw);
             JsonNode choices = root.get("choices");
             if (choices == null || !choices.isArray() || choices.size() == 0) return null;
-            JsonNode msg = choices.get(0).get("message");
+            JsonNode choice = choices.get(0);
+            JsonNode msg = choice.get("message");
             if (msg == null) return null;
             JsonNode content = msg.get("content");
-            return content == null ? null : content.asText();
+            String text = content == null ? null : content.asText();
+            if (text == null) return null;
+            String finishReason = choice.hasNonNull("finish_reason") ? choice.get("finish_reason").asText("") : "";
+            if ("length".equals(finishReason)) {
+                // 输出被 max_tokens 截断了。一字未动地丢给 Jackson 必然抛 "expected close marker"，
+                // 这是我们看到的真实 bug。尝试用括号配平补全 JSON，让大部分已生成的 finding 仍可用。
+                log.warn("[LLM] response truncated (finish_reason=length, max-tokens 太小?). 尝试补齐 JSON.");
+                String salvaged = salvageTruncatedJson(text);
+                if (salvaged != null) return salvaged;
+            }
+            return text;
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 给被 max_tokens 截断的 JSON 补尾。
+     * <p>策略：找到最后一个完整的 '}'，把它之后被切断的半截扔掉；然后扫一遍前缀里没闭合的
+     * '{'/'[' 数量，按缺多少补多少。已完整的对象都能保留，只是丢掉残缺的最后一项。</p>
+     */
+    static String salvageTruncatedJson(String text) {
+        if (text == null) return null;
+        String stripped = stripCodeFence(text);
+        if (stripped == null || stripped.isEmpty()) return "{\"findings\":[]}";
+        int lastClose = stripped.lastIndexOf('}');
+        if (lastClose < 0) {
+            // 还没生成出第一个完整对象就截了
+            return "{\"findings\":[]}";
+        }
+        String head = stripped.substring(0, lastClose + 1);
+        int braces = 0, brackets = 0;
+        boolean inString = false, escape = false;
+        for (int i = 0; i < head.length(); i++) {
+            char c = head.charAt(i);
+            if (escape) { escape = false; continue; }
+            if (inString) {
+                if (c == '\\') escape = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '{') braces++;
+            else if (c == '}') braces--;
+            else if (c == '[') brackets++;
+            else if (c == ']') brackets--;
+        }
+        StringBuilder sb = new StringBuilder(head);
+        for (int i = 0; i < brackets; i++) sb.append(']');
+        for (int i = 0; i < braces; i++) sb.append('}');
+        return sb.toString();
     }
 
     private static String stripCodeFence(String s) {

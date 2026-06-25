@@ -106,7 +106,7 @@ app:
       api-key: ""
       model: "qwen2.5-coder-32b-instruct"
       timeout-seconds: 120
-      max-tokens: 4096
+      max-tokens: 8192
     notify:
       dingtalk-enabled: true
       message-max-chars: 4500

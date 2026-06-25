@@ -43,15 +43,28 @@ public class MrFileListFetcher {
      * patch 是 GitLab 提供的 {@code Diff.getDiff()}，由若干 @@ hunk 组成。
      */
     public List<MrFileChange> changesOf(Repo repo, int mrIid) {
-        if (repo == null) return new ArrayList<>();
+        return infoOf(repo, mrIid).getChanges();
+    }
+
+    /**
+     * 返回 MR 的源分支名 + 文件变更列表。源分支 LLM "三明治 prompt" 要用 —— 拿来做 fetch
+     * 之后通过 {@code git show origin/<source>:<path>} 读到 MR 自己侧的最终文件版本。
+     *
+     * <p>失败（认证、网络、MR 不存在）一律返回空壳 {@code new MrInfo(null, [])}，调用方按"无 source"分支退化处理。</p>
+     */
+    public MrInfo infoOf(Repo repo, int mrIid) {
+        MrInfo empty = new MrInfo(null, new ArrayList<>());
+        if (repo == null) return empty;
         String host = repo.getGitlabHost();
         String projectPath = repo.getProjectPath();
-        if (host == null || host.isEmpty() || projectPath == null || projectPath.isEmpty()) return new ArrayList<>();
+        if (host == null || host.isEmpty() || projectPath == null || projectPath.isEmpty()) return empty;
 
         try (GitLabApi api = buildApi(repo)) {
             MergeRequest mr = api.getMergeRequestApi().getMergeRequestChanges(projectPath, mrIid);
-            List<Diff> diffs = mr != null ? mr.getChanges() : null;
-            if (diffs == null) return new ArrayList<>();
+            if (mr == null) return empty;
+            List<Diff> diffs = mr.getChanges();
+            String sourceBranch = mr.getSourceBranch();
+            if (diffs == null) return new MrInfo(sourceBranch, new ArrayList<>());
             // 同一文件可能在 changes 里出现多次（rename + 内容改）— 后出现的合并 patch 文本
             Map<String, MrFileChange> byPath = new LinkedHashMap<>();
             for (Diff d : diffs) {
@@ -67,10 +80,10 @@ public class MrFileListFetcher {
                     byPath.put(path, new MrFileChange(path, patch));
                 }
             }
-            return new ArrayList<>(byPath.values());
+            return new MrInfo(sourceBranch, new ArrayList<>(byPath.values()));
         } catch (Exception e) {
-            log.warn("[COMPARE-MR] failed to fetch changes for MR !{}: {}", mrIid, e.getMessage());
-            return new ArrayList<>();
+            log.warn("[COMPARE-MR] failed to fetch info for MR !{}: {}", mrIid, e.getMessage());
+            return empty;
         }
     }
 

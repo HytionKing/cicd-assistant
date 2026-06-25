@@ -16,6 +16,7 @@ import com.cicdassistant.service.compare.LlmClient;
 import com.cicdassistant.service.compare.LlmPromptBuilder;
 import com.cicdassistant.service.compare.MrFileChange;
 import com.cicdassistant.service.compare.MrFileListFetcher;
+import com.cicdassistant.service.compare.MrInfo;
 import com.cicdassistant.service.compare.PatchHunkVerifier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -93,7 +94,24 @@ public class CompareEngine {
 
         try {
             File repoRoot = git.ensureClone(repo);
-            git.fetchBranches(repoRoot, Arrays.asList(task.getBaselineBranch(), target.getTargetBranch()));
+
+            // 有 MR 的话，先一次性把 MR 元数据（含 source 分支名 + 文件 patch 列表）拉好。
+            // 然后把 baseline / target / 所有 source 分支一次性 fetch 到本地，避免后面循环里反复 git fetch。
+            Map<Integer, MrInfo> mrInfoCache = new LinkedHashMap<>();
+            List<String> branchesToFetch = new ArrayList<>();
+            branchesToFetch.add(task.getBaselineBranch());
+            branchesToFetch.add(target.getTargetBranch());
+            if (hasMrs) {
+                for (Integer iid : mrIids) {
+                    MrInfo info = mrFiles.infoOf(repo, iid);
+                    mrInfoCache.put(iid, info);
+                    if (info.getSourceBranch() != null && !info.getSourceBranch().isEmpty()
+                            && !branchesToFetch.contains(info.getSourceBranch())) {
+                        branchesToFetch.add(info.getSourceBranch());
+                    }
+                }
+            }
+            git.fetchBranches(repoRoot, branchesToFetch);
 
             // LLM 需要的上下文一次解析；非 LLM 路径用不到也无副作用
             List<CompareContext> contexts = needsLlm(mode)
@@ -110,10 +128,10 @@ public class CompareEngine {
             Set<String> scannedFiles = new LinkedHashSet<>();
 
             if (hasMrs && (mode.equals("RULE") || mode.equals("HYBRID"))) {
-                runMrPath(task, repo, target, mrIids, mode, patchReviewSystem, repoRoot, c, scannedFiles);
+                runMrPath(task, repo, target, mrIids, mrInfoCache, mode, patchReviewSystem, repoRoot, c, scannedFiles);
             } else if (mode.equals("LLM") && hasMrs) {
                 // 纯 LLM 模式 + 有 MR：走 patch 驱动（HYBRID 同款）但不带规则结论。fat 不参与。
-                runLlmOnPatch(task, repo, target, mrIids, patchReviewSystem, repoRoot, c, scannedFiles);
+                runLlmOnPatch(task, repo, target, mrIids, mrInfoCache, patchReviewSystem, repoRoot, c, scannedFiles);
             } else if (mode.equals("LLM")) {
                 // LLM + 没选 MR：唯一选择是 fat ↔ env 整文件比对（兜底，老逻辑）
                 runLlmStandalone(task, repo, target, mrIids, fileLevelSystem, repoRoot, c, scannedFiles);
@@ -142,12 +160,15 @@ public class CompareEngine {
 
     /** MR 驱动：用 patch verifier 验证 MR 的改动是否落在 target 上。 */
     private void runMrPath(CompareTask task, Repo repo, CompareTarget target, List<Integer> mrIids,
+                           Map<Integer, MrInfo> mrInfoCache,
                            String mode, String systemPrompt, File repoRoot,
                            Counters c, Set<String> scannedFiles) throws InterruptedException {
         for (Integer mrIid : mrIids) {
-            List<MrFileChange> changes = mrFiles.changesOf(repo, mrIid);
-            log.info("[COMPARE#{}] target={} MR !{} touches {} files",
-                    task.getId(), target.getTargetBranch(), mrIid, changes.size());
+            MrInfo info = mrInfoCache.getOrDefault(mrIid, new MrInfo(null, Collections.emptyList()));
+            List<MrFileChange> changes = info.getChanges();
+            String sourceBranch = info.getSourceBranch();
+            log.info("[COMPARE#{}] target={} MR !{} source={} touches {} files",
+                    task.getId(), target.getTargetBranch(), mrIid, sourceBranch, changes.size());
             for (MrFileChange ch : changes) {
                 String path = ch.getPath();
                 String tgt = git.readFile(repoRoot, target.getTargetBranch(), path);
@@ -160,8 +181,12 @@ public class CompareEngine {
                             .filter(f -> "ERROR".equals(f.getSeverity()) || "WARN".equals(f.getSeverity()))
                             .collect(Collectors.toList());
                     if (!review.isEmpty()) {
-                        String userPrompt = promptBuilder.buildUserForPatchReview(
-                                path, mrIid, ch.getPatch(), target.getTargetBranch(), tgt, review);
+                        // 三明治：patch + source 全文 + env 全文（按 token 预算自动降级到窗口）
+                        String src = readSourceFile(repoRoot, sourceBranch, path);
+                        String userPrompt = promptBuilder.buildUserForThreeWayReview(
+                                path, mrIid, ch.getPatch(),
+                                sourceBranch, src,
+                                target.getTargetBranch(), tgt, review);
                         fs.addAll(llmClient.evaluate(path, systemPrompt, userPrompt));
                     }
                 }
@@ -173,10 +198,11 @@ public class CompareEngine {
 
     /**
      * 纯 LLM + 有 MR：和 HYBRID 同样的"patch 驱动"路径，但不跑规则、不把规则结论喂给模型。
-     * 给 LLM 的只有：MR 的 patch + target 的窗口化视图，让它独立判断每条 +/− 是否生效。
+     * 给 LLM 的是：MR patch + 源分支同文件全文（"应该长成的样子"）+ 目标分支同文件全文（"实际样子"）。
      * fat（baseline）完全不读，彻底规避"fat 上未上线代码污染 prompt"的老问题。
      */
     private void runLlmOnPatch(CompareTask task, Repo repo, CompareTarget target, List<Integer> mrIids,
+                               Map<Integer, MrInfo> mrInfoCache,
                                String systemPrompt, File repoRoot,
                                Counters c, Set<String> scannedFiles) throws InterruptedException {
         if (!llmClient.isReady()) {
@@ -185,20 +211,35 @@ public class CompareEngine {
             return;
         }
         for (Integer mrIid : mrIids) {
-            List<MrFileChange> changes = mrFiles.changesOf(repo, mrIid);
-            log.info("[COMPARE#{}] target={} MR !{} (LLM-only) touches {} files",
-                    task.getId(), target.getTargetBranch(), mrIid, changes.size());
+            MrInfo info = mrInfoCache.getOrDefault(mrIid, new MrInfo(null, Collections.emptyList()));
+            List<MrFileChange> changes = info.getChanges();
+            String sourceBranch = info.getSourceBranch();
+            log.info("[COMPARE#{}] target={} MR !{} source={} (LLM-only) touches {} files",
+                    task.getId(), target.getTargetBranch(), mrIid, sourceBranch, changes.size());
             for (MrFileChange ch : changes) {
                 String path = ch.getPath();
                 String tgt = git.readFile(repoRoot, target.getTargetBranch(), path);
                 scannedFiles.add(path);
-                // 不传 ruleFindings —— buildUserForPatchReview 会跳过"规则怀疑点"段落，
-                // LLM 独立按 system prompt 里的判定步骤核实
-                String userPrompt = promptBuilder.buildUserForPatchReview(
-                        path, mrIid, ch.getPatch(), target.getTargetBranch(), tgt, null);
+                String src = readSourceFile(repoRoot, sourceBranch, path);
+                // 不传 ruleFindings —— LLM 独立按 system prompt 里的判定步骤核实
+                String userPrompt = promptBuilder.buildUserForThreeWayReview(
+                        path, mrIid, ch.getPatch(),
+                        sourceBranch, src,
+                        target.getTargetBranch(), tgt, null);
                 List<CompareFinding> fs = llmClient.evaluate(path, systemPrompt, userPrompt);
                 persistAll(fs, target, mrIid, c);
             }
+        }
+    }
+
+    /** 软失败：source 分支或文件读不到 → 返回 null，prompt builder 会透明降级到 patch + env 窗口。 */
+    private String readSourceFile(File repoRoot, String sourceBranch, String path) throws InterruptedException {
+        if (sourceBranch == null || sourceBranch.isEmpty()) return null;
+        try {
+            return git.readFile(repoRoot, sourceBranch, path);
+        } catch (Exception e) {
+            log.debug("[COMPARE] source file unreadable {}:{} -> {}", sourceBranch, path, e.getMessage());
+            return null;
         }
     }
 
