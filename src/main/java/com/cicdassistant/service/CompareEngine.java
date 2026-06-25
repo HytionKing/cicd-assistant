@@ -96,22 +96,25 @@ public class CompareEngine {
             File repoRoot = git.ensureClone(repo);
 
             // 有 MR 的话，先一次性把 MR 元数据（含 source 分支名 + 文件 patch 列表）拉好。
-            // 然后把 baseline / target / 所有 source 分支一次性 fetch 到本地，避免后面循环里反复 git fetch。
             Map<Integer, MrInfo> mrInfoCache = new LinkedHashMap<>();
-            List<String> branchesToFetch = new ArrayList<>();
-            branchesToFetch.add(task.getBaselineBranch());
-            branchesToFetch.add(target.getTargetBranch());
+            List<String> sourceBranches = new ArrayList<>();
             if (hasMrs) {
                 for (Integer iid : mrIids) {
                     MrInfo info = mrFiles.infoOf(repo, iid);
                     mrInfoCache.put(iid, info);
-                    if (info.getSourceBranch() != null && !info.getSourceBranch().isEmpty()
-                            && !branchesToFetch.contains(info.getSourceBranch())) {
-                        branchesToFetch.add(info.getSourceBranch());
+                    String sb = info.getSourceBranch();
+                    if (sb != null && !sb.isEmpty() && !sourceBranches.contains(sb)) {
+                        sourceBranches.add(sb);
                     }
                 }
             }
-            git.fetchBranches(repoRoot, branchesToFetch);
+            // baseline + target 必须 fetch 成功，整个任务依赖它们；任一失败就直接挂掉任务
+            git.fetchBranches(repoRoot, Arrays.asList(task.getBaselineBranch(), target.getTargetBranch()));
+            // source 分支只是"三明治 prompt"的加分项 —— GitLab 上可能已被删（MR 合后清理），
+            // 任一拉不到都不应该让整个任务失败，readSourceFile 会在读不到时透明退化。
+            if (!sourceBranches.isEmpty()) {
+                git.fetchBranchesBestEffort(repoRoot, sourceBranches);
+            }
 
             // LLM 需要的上下文一次解析；非 LLM 路径用不到也无副作用
             List<CompareContext> contexts = needsLlm(mode)

@@ -77,6 +77,37 @@ public class GitWorkspaceManager {
         runGit(repoRoot, args.toArray(new String[0]));
     }
 
+    /**
+     * 尽力 fetch：任一分支不存在 / 拉不到都只 WARN，不抛异常。
+     * 用于"可有可无"的分支拉取（比如 MR 的 source 分支，合并后可能已被删）。
+     * 优化：先一次性带所有分支试一次（成功就最快）；失败再退到逐个 fetch，
+     * 把存在的拉下来，不存在的吞掉。
+     */
+    public void fetchBranchesBestEffort(File repoRoot, List<String> branches) throws InterruptedException {
+        if (branches == null || branches.isEmpty()) return;
+        try {
+            fetchBranches(repoRoot, branches);
+            return;
+        } catch (IOException combinedFail) {
+            log.warn("[COMPARE-GIT] combined fetch failed ({}), falling back to per-branch fetch",
+                    truncate(combinedFail.getMessage()));
+        }
+        for (String b : branches) {
+            if (StringUtils.isBlank(b)) continue;
+            try {
+                fetchBranches(repoRoot, java.util.Collections.singletonList(b));
+            } catch (IOException e) {
+                log.warn("[COMPARE-GIT] best-effort fetch skipped branch={} reason={}",
+                        b, truncate(e.getMessage()));
+            }
+        }
+    }
+
+    private static String truncate(String s) {
+        if (s == null) return "";
+        return s.length() > 200 ? s.substring(0, 200) + "..." : s;
+    }
+
     /** 读取某分支某文件内容；文件不存在返回 null。 */
     public String readFile(File repoRoot, String branch, String path) throws InterruptedException {
         try {
