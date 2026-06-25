@@ -277,6 +277,7 @@
     const hasBaseline = !!(f.baselineSnippet && f.baselineSnippet.trim());
     const hasTarget = !!(f.targetSnippet && f.targetSnippet.trim());
     const isPatch = f.detector === 'RULE_PATCH' && hasBaseline;
+    const isLlm = f.detector === 'LLM';
 
     let snippetHtml = '';
     if (isPatch) {
@@ -294,6 +295,26 @@
         </div>
         <div class="diff-box">${renderPatchSnippet(f.baselineSnippet)}</div>
       `;
+    } else if (isLlm && (hasBaseline || hasTarget)) {
+      // AI 评语里引用了具体行号，后端已经把对应代码片段抽到了 baselineSnippet（源）/ targetSnippet（目标）
+      let sections = '';
+      if (hasBaseline) {
+        sections += `
+          <div class="finding-modal-section-title">
+            <i class="ti ti-source-code"></i>AI 引用的源分支代码（带行号）
+          </div>
+          <pre class="snippet-box">${escapeHtml(f.baselineSnippet)}</pre>
+        `;
+      }
+      if (hasTarget) {
+        sections += `
+          <div class="finding-modal-section-title">
+            <i class="ti ti-target"></i>AI 引用的目标分支代码（带行号）
+          </div>
+          <pre class="snippet-box">${escapeHtml(f.targetSnippet)}</pre>
+        `;
+      }
+      snippetHtml = sections;
     } else if (hasBaseline && hasTarget) {
       snippetHtml = `
         <div class="finding-modal-section-title">
