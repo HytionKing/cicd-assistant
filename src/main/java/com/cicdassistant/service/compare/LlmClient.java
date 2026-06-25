@@ -19,7 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * OpenAI 兼容 chat completions 客户端。
@@ -264,5 +269,135 @@ public class LlmClient {
 
     private static CompareFinding errorFinding(String path, String type, String summary, String rawDump) {
         return makeFinding(path, type, "WARN", summary, rawDump);
+    }
+
+    // ---- 后处理：从 AI comment 里抽行号引用，到对应文件抽片段写回 finding ----
+
+    /**
+     * AI 评语里常出现"目标分支第 234~237 行已包含..."，detail 弹窗只看到一行文字定位起来很麻烦。
+     * 这里把这些行号引用提取出来，回到 source/target 文件抽真实代码片段，分别填到
+     * baselineSnippet（源分支片段）/ targetSnippet（目标分支片段）上，让前端能直接展示。
+     *
+     * <p>已有 snippet 的不覆盖（patch verifier 自己产的 finding 走 RULE_PATCH detector，
+     * 不会经过这里；但是为防万一加保护）。</p>
+     */
+    public static void populateCitedSnippet(CompareFinding f,
+                                            String sourceContent, String targetContent) {
+        if (f == null || !"LLM".equals(f.getDetector())) return;
+        String comment = f.getLlmComment();
+        if (comment == null || comment.isEmpty()) return;
+
+        if (f.getTargetSnippet() == null || f.getTargetSnippet().isEmpty()) {
+            String tgtSnip = extractCitedLines(comment, targetContent, /*forSide=*/"目标");
+            if (tgtSnip != null) f.setTargetSnippet(tgtSnip);
+        }
+        if (f.getBaselineSnippet() == null || f.getBaselineSnippet().isEmpty()) {
+            String srcSnip = extractCitedLines(comment, sourceContent, /*forSide=*/"源");
+            if (srcSnip != null) f.setBaselineSnippet(srcSnip);
+        }
+    }
+
+    // 同时匹配"第 234~237 行"/"第 234-237 行"/"第 234～237 行"/"第 234 至 237 行"等
+    private static final Pattern RANGE_PAT = Pattern.compile("第\\s*(\\d+)\\s*[~～\\-–至到]\\s*(\\d+)\\s*行");
+    // 单行："第 234 行"，可在范围模式抓完之后捡漏（已被范围覆盖的会被去重）
+    private static final Pattern SINGLE_PAT = Pattern.compile("第\\s*(\\d+)\\s*行");
+
+    /**
+     * 在 comment 中"靠近 {目标|源}分支"那几句话里找行号，去对应内容里抽行（±2 行上下文）。
+     * 用"side 关键字"过滤是因为 comment 可能同时引用源/目标两侧，避免串味儿。
+     * <p>找不到任何行号引用或 content 为空就返回 null。</p>
+     */
+    static String extractCitedLines(String comment, String content, String forSide) {
+        if (comment == null || content == null || content.isEmpty()) return null;
+        List<int[]> ranges = parseSideAnchoredRanges(comment, forSide);
+        if (ranges.isEmpty()) return null;
+
+        String[] lines = content.split("\\r?\\n", -1);
+        int total = lines.length;
+        if (total == 0) return null;
+
+        // 范围 + ±2 行上下文，合并重叠
+        int CONTEXT = 2;
+        List<int[]> windows = new ArrayList<>();
+        for (int[] r : ranges) {
+            int from = Math.max(1, r[0] - CONTEXT);
+            int to = Math.min(total, r[1] + CONTEXT);
+            if (to < from) continue;
+            windows.add(new int[]{from, to});
+        }
+        if (windows.isEmpty()) return null;
+        windows.sort(Comparator.comparingInt(a -> a[0]));
+        List<int[]> merged = new ArrayList<>();
+        for (int[] w : windows) {
+            if (!merged.isEmpty()) {
+                int[] last = merged.get(merged.size() - 1);
+                if (w[0] <= last[1] + 1) { last[1] = Math.max(last[1], w[1]); continue; }
+            }
+            merged.add(new int[]{w[0], w[1]});
+        }
+
+        int width = String.valueOf(total).length();
+        StringBuilder sb = new StringBuilder();
+        int lastEnd = 0;
+        for (int[] w : merged) {
+            if (lastEnd > 0 && w[0] > lastEnd + 1) {
+                sb.append("... [省略 ").append(w[0] - lastEnd - 1).append(" 行] ...\n");
+            }
+            for (int ln = w[0]; ln <= w[1]; ln++) {
+                sb.append(String.format("%" + width + "d| %s%n", ln, lines[ln - 1]));
+            }
+            lastEnd = w[1];
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /**
+     * 取 comment 中 "{forSide}分支..." 紧随其后的若干行号引用。
+     * 简化策略：把 comment 按 "{forSide}分支" 切分，对每段后续 60 字符做行号正则匹配。
+     * 这样 "目标分支第 234 行" 和 "源分支第 88 行" 不会互相串。
+     */
+    static List<int[]> parseSideAnchoredRanges(String comment, String forSide) {
+        Set<int[]> dedup = new LinkedHashSet<>();
+        if (comment == null || forSide == null) return new ArrayList<>(dedup);
+        String anchor = forSide + "分支";
+        int idx = 0;
+        while ((idx = comment.indexOf(anchor, idx)) >= 0) {
+            int from = idx + anchor.length();
+            int to = Math.min(comment.length(), from + 80);
+            // 滑窗里若再次出现 "分支" 关键字（说明跨到了另一侧），就在那里截止，
+            // 防止 "目标分支第 235 行...而源分支第 100 行" 这种把 100 也算到目标侧
+            int nextBranch = comment.indexOf("分支", from);
+            if (nextBranch >= 0 && nextBranch < to) to = nextBranch;
+            String slice = comment.substring(from, to);
+            // 范围
+            Matcher m1 = RANGE_PAT.matcher(slice);
+            while (m1.find()) {
+                try {
+                    int a = Integer.parseInt(m1.group(1));
+                    int b = Integer.parseInt(m1.group(2));
+                    if (a > 0 && b >= a) addUnique(dedup, new int[]{a, b});
+                } catch (NumberFormatException ignored) {}
+            }
+            // 单行（去重）
+            Matcher m2 = SINGLE_PAT.matcher(slice);
+            while (m2.find()) {
+                try {
+                    int n = Integer.parseInt(m2.group(1));
+                    if (n > 0 && !inAny(dedup, n)) addUnique(dedup, new int[]{n, n});
+                } catch (NumberFormatException ignored) {}
+            }
+            idx = to;
+        }
+        return new ArrayList<>(dedup);
+    }
+
+    private static boolean inAny(Set<int[]> ranges, int n) {
+        for (int[] r : ranges) if (n >= r[0] && n <= r[1]) return true;
+        return false;
+    }
+
+    private static void addUnique(Set<int[]> set, int[] r) {
+        for (int[] x : set) if (x[0] == r[0] && x[1] == r[1]) return;
+        set.add(r);
     }
 }

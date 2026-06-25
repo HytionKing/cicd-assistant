@@ -190,7 +190,11 @@ public class CompareEngine {
                                 path, mrIid, ch.getPatch(),
                                 sourceBranch, src,
                                 target.getTargetBranch(), tgt, review);
-                        fs.addAll(llmClient.evaluate(path, systemPrompt, userPrompt));
+                        List<CompareFinding> llmFs = llmClient.evaluate(path, systemPrompt, userPrompt);
+                        // 从 LLM 评语里抽行号引用，把对应源/目标分支的代码片段写回 finding，
+                        // 前端 detail 弹窗就能直接看到 AI 引用的代码而不只是干说一句行号
+                        for (CompareFinding lf : llmFs) LlmClient.populateCitedSnippet(lf, src, tgt);
+                        fs.addAll(llmFs);
                     }
                 }
 
@@ -230,6 +234,7 @@ public class CompareEngine {
                         sourceBranch, src,
                         target.getTargetBranch(), tgt, null);
                 List<CompareFinding> fs = llmClient.evaluate(path, systemPrompt, userPrompt);
+                for (CompareFinding lf : fs) LlmClient.populateCitedSnippet(lf, src, tgt);
                 persistAll(fs, target, mrIid, c);
             }
         }
