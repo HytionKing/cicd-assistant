@@ -13,6 +13,8 @@ import java.util.List;
 public class AppProperties {
 
     private String publicHost = "";
+    /** 侧栏底部"意见反馈"链接。一般指向在线文档或表单。留空走 GitHub Issues。 */
+    private String feedbackUrl = "";
     private Paths paths = new Paths();
     private Auth auth = new Auth();
     private Workspace workspace = new Workspace();

@@ -87,10 +87,12 @@ public class CompareController {
     @GetMapping("/recent-mrs")
     public Map<String, Object> recentMrs(@RequestParam Long repoId,
                                          @RequestParam String targetBranches,
-                                         @RequestParam(required = false) Integer limit) {
+                                         @RequestParam(required = false) Integer limit,
+                                         @RequestParam(required = false) Boolean todayOnly) {
         int lim = limit != null && limit > 0
                 ? Math.min(limit, 100)
                 : appProperties.getCompare().getMrFetchDefaultLimit();
+        boolean today = Boolean.TRUE.equals(todayOnly);
         Repo repo = repoService.findByIdDecrypted(repoId);
         Map<String, Object> r = new HashMap<>();
         if (repo == null) {
@@ -107,7 +109,7 @@ public class CompareController {
             Map<String, Object> g = new LinkedHashMap<>();
             g.put("targetBranch", branch);
             try {
-                List<MergeRequest> mrs = gitLabService.listRecentMergedMrs(repo, branch, lim);
+                List<MergeRequest> mrs = gitLabService.listRecentMergedMrs(repo, branch, lim, today);
                 List<Map<String, Object>> items = new ArrayList<>();
                 for (MergeRequest mr : mrs) {
                     Map<String, Object> m = new LinkedHashMap<>();

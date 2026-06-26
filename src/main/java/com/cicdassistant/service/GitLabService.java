@@ -38,8 +38,9 @@ public class GitLabService {
     /**
      * 拉取某个目标分支最近 N 条已合并 MR。
      * 用于"合并检测"页面 MR 自动补全：用户选完被对比分支后调一次。
+     * <p>{@code todayOnly=true} 时只取今天 00:00 以后合并的 MR，常用于"只看今天上线的"场景。</p>
      */
-    public List<MergeRequest> listRecentMergedMrs(Repo repo, String targetBranch, int limit) throws GitLabApiException {
+    public List<MergeRequest> listRecentMergedMrs(Repo repo, String targetBranch, int limit, boolean todayOnly) throws GitLabApiException {
         if (StringUtils.isBlank(repo.getGitlabHost()) || StringUtils.isBlank(repo.getProjectPath())
                 || StringUtils.isBlank(targetBranch)) {
             return new ArrayList<>();
@@ -53,7 +54,26 @@ public class GitLabService {
                     .withSort(Constants.SortOrder.DESC);
             // gitlab4j-api 4.19 的 projectId 字段是 Integer，先尝试 setter
             setProjectIdReflective(f, projectId);
-            return api.getMergeRequestApi().getMergeRequests(f, 1, Math.max(1, Math.min(limit, 100)));
+            // GitLab MR 没有"按 mergedAt 过滤"的服务端参数；用 updated_after 把窗口拉到今天 0 点附近，
+            // 服务端先粗筛，本地再按 mergedAt 严格过滤一次（updated_at 可能晚于 mergedAt，但不会早于）
+            java.util.Date todayStart = null;
+            if (todayOnly) {
+                todayStart = java.util.Date.from(
+                        java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+                try {
+                    java.lang.reflect.Method m = f.getClass().getMethod("withUpdatedAfter", java.util.Date.class);
+                    m.invoke(f, todayStart);
+                } catch (Throwable t) {
+                    log.debug("withUpdatedAfter not available, will filter client-side only");
+                }
+            }
+            List<MergeRequest> raw = api.getMergeRequestApi().getMergeRequests(f, 1, Math.max(1, Math.min(limit, 100)));
+            if (!todayOnly || todayStart == null) return raw;
+            // 本地按 mergedAt 严格过滤：updated_after 是个 hint，可能放进一些昨天合的但今天有评论的
+            java.util.Date cutoff = todayStart;
+            return raw.stream()
+                    .filter(m -> m.getMergedAt() != null && !m.getMergedAt().before(cutoff))
+                    .collect(java.util.stream.Collectors.toList());
         }
     }
 

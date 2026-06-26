@@ -15,6 +15,13 @@
   const contextsWrap = document.getElementById('contexts-wrap');
   const inpMrLimit = document.getElementById('inp-mr-limit');
   const baselineMrHint = document.getElementById('baseline-mr-hint');
+  const inpTargetPrefix = document.getElementById('inp-target-prefix');
+  const btnApplyPrefix = document.getElementById('btn-apply-prefix');
+  const chkTodayOnly = document.getElementById('chk-today-only');
+
+  // 被对比分支默认前缀，浏览器记住上次的（不同团队规则不同：env-/release-/dev-…）
+  const PREFIX_KEY = 'compare.targetPrefix';
+  inpTargetPrefix.value = localStorage.getItem(PREFIX_KEY) || 'env-';
 
   let allBranches = [];
   let appConfig = { mrFetchDefaultLimit: 20, mrFetchMaxLimit: 100 };
@@ -75,15 +82,27 @@
       targetsBox.innerHTML = '<span class="text-secondary small">没有分支</span>';
       return;
     }
+    const prefix = (inpTargetPrefix.value || '').trim();
     targetsBox.innerHTML = branches.map(b =>
       `<label class="form-check">
          <input type="checkbox" class="form-check-input" value="${escapeHtml(b)}"
-                ${b.startsWith('env-') ? 'checked' : ''}/>
+                ${prefix && b.startsWith(prefix) ? 'checked' : ''}/>
          <span class="form-check-label">${escapeHtml(b)}</span>
        </label>`
     ).join('');
-    const envCount = branches.filter(b => b.startsWith('env-')).length;
-    targetsMsg.textContent = '共 ' + branches.length + ' 个分支，默认勾选 env-* 前缀（' + envCount + ' 个）';
+    const matched = prefix ? branches.filter(b => b.startsWith(prefix)).length : 0;
+    targetsMsg.textContent = '共 ' + branches.length + ' 个分支'
+      + (prefix ? '，默认勾选「' + prefix + '」前缀（' + matched + ' 个）' : '');
+  }
+
+  function applyPrefixCheck() {
+    const prefix = (inpTargetPrefix.value || '').trim();
+    localStorage.setItem(PREFIX_KEY, prefix);
+    targetsBox.querySelectorAll('input[type="checkbox"]').forEach(i => {
+      i.checked = prefix !== '' && i.value.startsWith(prefix);
+    });
+    const matched = prefix ? Array.from(targetsBox.querySelectorAll('input:checked')).length : 0;
+    targetsMsg.textContent = '已按「' + prefix + '」重新勾选（' + matched + ' 个）';
   }
 
   function renderBaselineList(branches) {
@@ -133,7 +152,8 @@
     try {
       const r = await api.get('/api/compare/recent-mrs?repoId=' + id +
         '&targetBranches=' + encodeURIComponent(targets.join(',')) +
-        '&limit=' + lim);
+        '&limit=' + lim +
+        (chkTodayOnly.checked ? '&todayOnly=true' : ''));
       mrsMsg.textContent = '';
       const groups = r.groups || [];
       let total = 0;
@@ -217,6 +237,12 @@
       UI.danger('创建失败: ' + e.message);
     }
   };
+
+  btnApplyPrefix.onclick = applyPrefixCheck;
+  // 输入框回车直接应用前缀，不用点旁边那个对勾
+  inpTargetPrefix.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); applyPrefixCheck(); }
+  });
 
   await loadConfig();
   await loadRepos();
