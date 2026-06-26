@@ -59,6 +59,11 @@
                         <label class="form-label">Webhook URL</label>
                         <input class="form-control" name="url" required placeholder="https://oapi.dingtalk.com/robot/send?access_token=xxx"/>
                     </div>
+                    <div class="mb-2">
+                        <label class="form-label">加签密钥 <span class="text-secondary fw-normal">（可选）</span></label>
+                        <input class="form-control" name="secret" placeholder="机器人安全设置勾选「加签」时填，否则留空"/>
+                        <small class="form-hint">钉钉机器人开启"加签"安全策略时必填；用"关键词"或"IP 白名单"策略请留空</small>
+                    </div>
                     <label class="form-check form-switch">
                         <input type="checkbox" class="form-check-input" name="enabled" checked/>
                         <span class="form-check-label">启用</span>

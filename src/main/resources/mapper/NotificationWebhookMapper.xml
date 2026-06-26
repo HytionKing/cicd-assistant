@@ -6,6 +6,7 @@
         <id property="id" column="id"/>
         <result property="name" column="name"/>
         <result property="url" column="url"/>
+        <result property="secret" column="secret"/>
         <result property="enabled" column="enabled"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -20,14 +21,15 @@
     </select>
 
     <insert id="insert" parameterType="com.cicdassistant.entity.NotificationWebhook" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO notification_webhook (name, url, enabled, created_at, updated_at)
-        VALUES (#{name}, #{url}, #{enabled}, #{createdAt}, #{updatedAt})
+        INSERT INTO notification_webhook (name, url, secret, enabled, created_at, updated_at)
+        VALUES (#{name}, #{url}, #{secret}, #{enabled}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="update" parameterType="com.cicdassistant.entity.NotificationWebhook">
         UPDATE notification_webhook SET
             name = #{name},
             url = #{url},
+            secret = #{secret},
             enabled = #{enabled},
             updated_at = #{updatedAt}
         WHERE id = #{id}

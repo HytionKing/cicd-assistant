@@ -26,6 +26,8 @@ public class SchemaMigrator implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensureColumn("repo", "modules", "TEXT");
+        // P4：钉钉加签可选
+        ensureColumn("notification_webhook", "secret", "TEXT");
     }
 
     private void ensureColumn(String table, String column, String type) {

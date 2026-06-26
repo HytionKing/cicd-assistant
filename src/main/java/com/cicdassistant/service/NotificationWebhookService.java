@@ -5,10 +5,6 @@ import com.cicdassistant.mapper.NotificationWebhookMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -18,9 +14,11 @@ import java.util.List;
 public class NotificationWebhookService {
 
     private final NotificationWebhookMapper mapper;
+    private final DingTalkSender ding;
 
-    public NotificationWebhookService(NotificationWebhookMapper mapper) {
+    public NotificationWebhookService(NotificationWebhookMapper mapper, DingTalkSender ding) {
         this.mapper = mapper;
+        this.ding = ding;
     }
 
     public List<NotificationWebhook> listAll() { return mapper.findAll(); }
@@ -45,47 +43,13 @@ public class NotificationWebhookService {
 
     public void delete(Long id) { mapper.deleteById(id); }
 
-    /** 发一条钉钉测试消息，返回 (success, message) */
+    /** 发一条钉钉测试消息，返回 (success, message)。走 DingTalkSender 同款路径以验证加签是否正确。 */
     public TestResult sendTest(Long id) {
         NotificationWebhook w = mapper.findById(id);
         if (w == null) return TestResult.fail("webhook 不存在");
-        String body = "{\"msgtype\":\"text\",\"text\":{\"content\":\"[CICD Assistant] 测试消息：" + w.getName() + " webhook 联通正常\"}}";
-        return postJson(w.getUrl(), body);
-    }
-
-    public TestResult postJson(String url, String body) {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(8000);
-            conn.setDoOutput(true);
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(body.getBytes(StandardCharsets.UTF_8));
-            }
-            int code = conn.getResponseCode();
-            String resp = readBody(conn);
-            if (code >= 200 && code < 300) return TestResult.ok("HTTP " + code + " - " + resp);
-            return TestResult.fail("HTTP " + code + " - " + resp);
-        } catch (Exception e) {
-            log.warn("post webhook failed: {}", e.getMessage());
-            return TestResult.fail(e.getMessage());
-        } finally {
-            if (conn != null) conn.disconnect();
-        }
-    }
-
-    private String readBody(HttpURLConnection conn) {
-        try {
-            java.io.InputStream is = conn.getErrorStream() != null ? conn.getErrorStream() : conn.getInputStream();
-            byte[] buf = new byte[4096];
-            int n = is.read(buf);
-            return n > 0 ? new String(buf, 0, n, StandardCharsets.UTF_8) : "";
-        } catch (Exception e) {
-            return "";
-        }
+        String text = "[CICD Assistant] 测试消息：" + w.getName() + " webhook 联通正常";
+        DingTalkSender.Result r = ding.sendText(w, text);
+        return r.isSuccess() ? TestResult.ok(r.getMessage()) : TestResult.fail(r.getMessage());
     }
 
     public static class TestResult {

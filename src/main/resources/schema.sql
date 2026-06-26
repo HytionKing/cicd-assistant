@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS notification_webhook (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     url TEXT NOT NULL,
+    secret TEXT,
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at TEXT,
     updated_at TEXT

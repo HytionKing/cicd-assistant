@@ -30,6 +30,7 @@ public class CompareService {
     private final NotificationWebhookMapper webhookMapper;
     private final RepoService repoService;
     private final CompareEngine engine;
+    private final CompareNotifier notifier;
     private final AppProperties appProperties;
 
     public CompareService(CompareTaskMapper taskMapper,
@@ -38,6 +39,7 @@ public class CompareService {
                           NotificationWebhookMapper webhookMapper,
                           RepoService repoService,
                           CompareEngine engine,
+                          CompareNotifier notifier,
                           AppProperties appProperties) {
         this.taskMapper = taskMapper;
         this.targetMapper = targetMapper;
@@ -45,6 +47,7 @@ public class CompareService {
         this.webhookMapper = webhookMapper;
         this.repoService = repoService;
         this.engine = engine;
+        this.notifier = notifier;
         this.appProperties = appProperties;
     }
 
@@ -195,12 +198,15 @@ public class CompareService {
         taskMapper.update(task);
         log.info("[COMPARE#{}] DONE status={} ({}/{})", taskId, finalStatus, succ, total);
 
-        // 推送钉钉（P4 才真发，先打日志）
-        if (task.getWebhookId() != null && appProperties.getCompare().getNotify().isDingtalkEnabled()) {
+        // 推送钉钉。任务最终态才发；目标分支列表用 targetMapper 重新查一次拿到最新计数
+        if (task.getWebhookId() != null) {
             NotificationWebhook hook = webhookMapper.findById(task.getWebhookId());
             if (hook != null && Integer.valueOf(1).equals(hook.getEnabled())) {
-                log.info("[COMPARE#{}] would send to webhook id={} name={} (P4 will implement)",
-                        taskId, hook.getId(), hook.getName());
+                try {
+                    notifier.notifyTaskDone(task, targetMapper.findByTaskId(taskId), hook);
+                } catch (Exception e) {
+                    log.warn("[COMPARE#{}] notify exception (swallowed): {}", taskId, e.getMessage());
+                }
             }
         }
     }

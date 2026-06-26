@@ -34,6 +34,7 @@
       form.elements.id.value = w.id;
       form.elements.name.value = w.name || '';
       form.elements.url.value = w.url || '';
+      form.elements.secret.value = w.secret || '';
       form.elements.enabled.checked = w.enabled === 1;
     } else {
       form.elements.id.value = '';
@@ -49,6 +50,7 @@
     const data = {
       name: form.elements.name.value,
       url: form.elements.url.value,
+      secret: form.elements.secret.value || null,
       enabled: form.elements.enabled.checked ? 1 : 0
     };
     const id = form.elements.id.value;
