@@ -94,8 +94,10 @@
                 </li>
                 </th:block>
             </ul>
-            <div class="mt-auto sidebar-footer">
-                <a th:href="${@environment.getProperty('app.feedback-url') ?: 'https://github.com/HytionKing/cicd-assistant/issues'}"
+            <div class="mt-auto sidebar-footer"
+                 th:with="feedbackUrl=${@environment.getProperty('app.feedback-url')}">
+                <a th:if="${feedbackUrl != null and !feedbackUrl.isEmpty()}"
+                   th:href="${feedbackUrl}"
                    target="_blank" rel="noopener" class="sidebar-footer-link" title="提交问题或建议">
                     <i class="ti ti-message-circle me-2"></i>
                     <span>意见反馈</span>
