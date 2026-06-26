@@ -5,6 +5,7 @@ import com.cicdassistant.entity.CompareTarget;
 import com.cicdassistant.entity.CompareTask;
 import com.cicdassistant.entity.NotificationWebhook;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -25,10 +26,14 @@ public class CompareNotifier {
 
     private final AppProperties appProperties;
     private final DingTalkSender ding;
+    /** 进程实际监听端口。app.public-host 没带端口时自动拼上它。 */
+    private final int serverPort;
 
-    public CompareNotifier(AppProperties appProperties, DingTalkSender ding) {
+    public CompareNotifier(AppProperties appProperties, DingTalkSender ding,
+                           @Value("${server.port:8080}") int serverPort) {
         this.appProperties = appProperties;
         this.ding = ding;
+        this.serverPort = serverPort;
     }
 
     public void notifyTaskDone(CompareTask task, List<CompareTarget> targets, NotificationWebhook hook) {
@@ -97,13 +102,33 @@ public class CompareNotifier {
         return sb.toString();
     }
 
+    /**
+     * 拼报告链接的 base。规则：
+     * <ul>
+     *   <li>app.public-host 留空 → http://localhost:{server.port}</li>
+     *   <li>配了完整 URL（含 :port）→ 原样用，最多去掉末尾 /</li>
+     *   <li>只配了 host（如 10.0.80.123 或 example.com）→ 自动补 :server.port</li>
+     *   <li>配了 host 但已经带 :端口 → 原样用</li>
+     * </ul>
+     */
     private String publicHost() {
         String h = appProperties.getPublicHost();
-        if (h == null || h.trim().isEmpty()) return "http://localhost:8080";
+        if (h == null || h.trim().isEmpty()) return "http://localhost:" + serverPort;
         h = h.trim();
-        if (!h.startsWith("http://") && !h.startsWith("https://")) h = "http://" + h;
+        boolean hasScheme = h.startsWith("http://") || h.startsWith("https://");
+        if (!hasScheme) h = "http://" + h;
         while (h.endsWith("/")) h = h.substring(0, h.length() - 1);
-        return h;
+        // 判断 host 部分有没有端口。截取 scheme 之后到第一个 / 之前的 host 段。
+        int schemeEnd = h.indexOf("://") + 3;
+        int pathStart = h.indexOf('/', schemeEnd);
+        String hostSeg = pathStart < 0 ? h.substring(schemeEnd) : h.substring(schemeEnd, pathStart);
+        // host 段可能包含 IPv6 [::1]，那种就先不动；普通 host 看有没有 :
+        boolean ipv6 = hostSeg.startsWith("[");
+        boolean hasPort = ipv6 ? hostSeg.contains("]:") : hostSeg.contains(":");
+        if (hasPort) return h;
+        // 没端口 —— 在 host 段尾部塞 :serverPort
+        if (pathStart < 0) return h + ":" + serverPort;
+        return h.substring(0, pathStart) + ":" + serverPort + h.substring(pathStart);
     }
 
     private static String statusBadge(String status) {

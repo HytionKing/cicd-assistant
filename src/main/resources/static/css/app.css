@@ -245,7 +245,7 @@
     margin: 0;
 }
 .navbar-vertical .nav-pills.nav-vertical .nav-link {
-    padding: 0.4rem 1rem 0.4rem 2.5rem;     /* 缩进对齐父项图标列右侧 */
+    padding: 0.4rem 1rem 0.4rem 3.25rem;    /* 比父项图标列再多缩进一截，层级更清楚 */
     font-size: 0.875rem;
     color: rgba(255, 255, 255, 0.55);
     border-left: 2px solid transparent;
@@ -306,6 +306,36 @@
 .navbar-vertical .navbar-brand {
     padding: 1rem 1.25rem;
     font-size: 1.05rem;
+}
+
+/* 侧栏滚动条收拾：
+   1. tabler 默认对 .navbar-collapse 设了 overflow-y: auto，部分 WebKit 浏览器（特别是
+      Windows）即使内容没超过高度也会画一个"灰条带箭头但没拇指"的占位滚动条。改成
+      overflow: visible，等到真的超高才让外层 .navbar-vertical 自己滚。
+   2. 横向滚动条出现是因为侧栏底部 form / chevron 加了若干 px 的子元素溢出，给 sidebar
+      内层加 overflow-x: hidden 兜底。 */
+.navbar-vertical {
+    overflow-x: hidden;
+}
+.navbar-vertical .navbar-collapse {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+/* WebKit 下隐藏到内容不溢出时不画轨道。Firefox 用 scrollbar-width */
+.navbar-vertical .navbar-collapse::-webkit-scrollbar {
+    width: 6px;
+    height: 0;
+}
+.navbar-vertical .navbar-collapse::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+.navbar-vertical .navbar-collapse::-webkit-scrollbar-track {
+    background: transparent;
+}
+.navbar-vertical .navbar-collapse {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 /* 侧栏底部：意见反馈 + 退出 —— 替代之前那个"按钮拉满"的丑样式 */
