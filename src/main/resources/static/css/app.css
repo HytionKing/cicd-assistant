@@ -237,14 +237,17 @@
     pointer-events: auto;
 }
 
-/* 侧栏二级菜单：缩进 + 颜色搭配 + 父项展开收起箭头 */
-.navbar-vertical .nav-pills.nav-vertical {
+/* 侧栏二级菜单：缩进 + 颜色搭配 + 父项展开收起箭头
+   注意特异性：Tabler 自带的 .navbar-vertical.navbar-expand-lg .navbar-collapse .navbar-nav .nav-link
+   有 5 个 class（特异性 0,5,0）且 padding 是简写，会把我们这边只写 4 class 的规则盖掉。
+   显式带上 .navbar-collapse .navbar-nav 把特异性升到 6 才能赢。 */
+.navbar-vertical .navbar-collapse .navbar-nav .nav-pills.nav-vertical {
     padding: 0.25rem 0 0.5rem;
 }
-.navbar-vertical .nav-pills.nav-vertical .nav-item {
+.navbar-vertical .navbar-collapse .navbar-nav .nav-pills.nav-vertical .nav-item {
     margin: 0;
 }
-.navbar-vertical .nav-pills.nav-vertical .nav-link {
+.navbar-vertical .navbar-collapse .navbar-nav .nav-pills.nav-vertical .nav-link {
     padding: 0.4rem 1rem 0.4rem 3.25rem;    /* 比父项图标列再多缩进一截，层级更清楚 */
     font-size: 0.875rem;
     color: rgba(255, 255, 255, 0.55);
@@ -252,16 +255,16 @@
     border-radius: 0;
     transition: color .15s, background-color .15s, border-color .15s;
 }
-.navbar-vertical .nav-pills.nav-vertical .nav-link:hover {
+.navbar-vertical .navbar-collapse .navbar-nav .nav-pills.nav-vertical .nav-link:hover {
     color: #ffffff;
     background-color: rgba(255, 255, 255, 0.04);
 }
-.navbar-vertical .nav-pills.nav-vertical .nav-link.active {
+.navbar-vertical .navbar-collapse .navbar-nav .nav-pills.nav-vertical .nav-link.active {
     color: #ffffff;
     background-color: rgba(58, 142, 230, 0.18);
     border-left-color: #3a8ee6;
 }
-.navbar-vertical .nav-pills.nav-vertical .nav-link .nav-link-icon {
+.navbar-vertical .navbar-collapse .navbar-nav .nav-pills.nav-vertical .nav-link .nav-link-icon {
     width: 1.25em;
     margin-right: 0.5em;
     color: inherit;
