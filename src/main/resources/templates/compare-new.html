@@ -44,15 +44,24 @@
                             </div>
 
                             <div class="col-12">
-                                <div class="d-flex align-items-center mb-1">
+                                <div class="d-flex align-items-center mb-1 flex-wrap gap-2">
                                     <label class="form-label mb-0">被对比分支（多选）</label>
-                                    <button id="btn-load-targets" class="btn btn-sm btn-outline-primary ms-3" type="button">
+                                    <div class="d-flex align-items-center ms-3 gap-1">
+                                        <label class="form-label mb-0 small text-secondary">默认勾选前缀</label>
+                                        <input id="inp-target-prefix" type="text" class="form-control form-control-sm"
+                                               style="width: 130px" placeholder="env-"/>
+                                        <button id="btn-apply-prefix" class="btn btn-sm btn-link p-0 ms-1" type="button"
+                                                title="按当前前缀重新勾选">
+                                            <i class="ti ti-check"></i>
+                                        </button>
+                                    </div>
+                                    <button id="btn-load-targets" class="btn btn-sm btn-outline-primary ms-2" type="button">
                                         <i class="ti ti-refresh me-1"></i>拉取分支
                                     </button>
                                     <span id="targets-msg" class="ms-3 text-secondary small"></span>
                                 </div>
                                 <div id="targets-box" class="select-list">
-                                    <span class="text-secondary small">点击"拉取分支"加载（默认勾选 env-* 前缀）</span>
+                                    <span class="text-secondary small">点击"拉取分支"加载（按上方前缀自动勾选）</span>
                                 </div>
                             </div>
 
@@ -65,6 +74,10 @@
                                                class="form-control form-control-sm" style="width: 80px"/>
                                         <span class="small text-secondary">条</span>
                                     </div>
+                                    <label class="form-check form-check-inline ms-2 mb-0 small text-secondary">
+                                        <input id="chk-today-only" type="checkbox" class="form-check-input"/>
+                                        <span class="form-check-label">只看今天合并的</span>
+                                    </label>
                                     <button id="btn-load-mrs" class="btn btn-sm btn-outline-primary ms-2" type="button">
                                         <i class="ti ti-search me-1"></i>查询 MR
                                     </button>

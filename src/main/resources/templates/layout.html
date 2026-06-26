@@ -94,10 +94,17 @@
                 </li>
                 </th:block>
             </ul>
-            <div class="mt-auto pb-3 px-3">
-                <form th:action="@{/logout}" method="post">
-                    <button type="submit" class="btn btn-outline-light w-100">
-                        <i class="ti ti-logout me-1"></i>退出
+            <div class="mt-auto sidebar-footer">
+                <a th:href="${@environment.getProperty('app.feedback-url') ?: 'https://github.com/HytionKing/cicd-assistant/issues'}"
+                   target="_blank" rel="noopener" class="sidebar-footer-link" title="提交问题或建议">
+                    <i class="ti ti-message-circle me-2"></i>
+                    <span>意见反馈</span>
+                    <i class="ti ti-external-link ms-auto opacity-50"></i>
+                </a>
+                <form th:action="@{/logout}" method="post" class="m-0">
+                    <button type="submit" class="sidebar-footer-link sidebar-footer-logout" title="退出登录">
+                        <i class="ti ti-logout me-2"></i>
+                        <span>退出</span>
                     </button>
                 </form>
             </div>

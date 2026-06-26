@@ -308,6 +308,42 @@
     font-size: 1.05rem;
 }
 
+/* 侧栏底部：意见反馈 + 退出 —— 替代之前那个"按钮拉满"的丑样式 */
+.sidebar-footer {
+    margin: 0 0.5rem 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.sidebar-footer-link {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.55rem 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.875rem;
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    transition: background-color .15s ease, color .15s ease;
+    cursor: pointer;
+    text-align: left;
+}
+.sidebar-footer-link:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+}
+.sidebar-footer-link .ti {
+    font-size: 1.05em;
+}
+.sidebar-footer-link.sidebar-footer-logout:hover {
+    background-color: rgba(220, 53, 69, 0.18);
+    color: #ff8a93;
+}
+
 /* 页头 icon 大小和文字对齐 */
 .page-title .ti {
     font-size: 1.4rem;
