@@ -55,13 +55,23 @@ public class BuildLaunchService {
         long t0 = System.currentTimeMillis();
         if (new File(repoDir, ".git").exists()) {
             log.info("[GIT] reuse workspace, fetch+reset branch={} dir={}", branch, repoDir.getAbsolutePath());
-            // 先 fetch 拉最新，再问 origin 侧的 tip，再 reset。这样"MR 没到 origin"跟"拉取有 bug"就
-            // 能在日志里一眼分开。ls-remote 才是真的问远端，不经本地引用缓存。
-            runGit(repoDir, "fetch", "--prune", "origin", branch);
-            String remoteTip = safeRemoteTip(repoDir, branch);
-            if (remoteTip != null) {
-                log.info("[GIT] origin/{} tip = {}", branch, remoteTip);
+
+            // ★ 关键：必须用显式 refspec 强制更新 refs/remotes/origin/<branch>。
+            //   `git fetch origin <branch>`（裸 branch 名）在 git 2.x 会把结果只写到 FETCH_HEAD，
+            //   不一定同步 refs/remotes/origin/<branch>，接下来 `reset --hard origin/<branch>` 就用了
+            //   上一次的旧 ref → 表现为"reuse workspace 永远拿不到新 commit"。这个坑正是用户遇到的现象。
+            String refspec = "+refs/heads/" + branch + ":refs/remotes/origin/" + branch;
+
+            String beforeFetch = safeRevParse(repoDir, "refs/remotes/origin/" + branch);
+            runGit(repoDir, "fetch", "--prune", "origin", refspec);
+            String afterFetch  = safeRevParse(repoDir, "refs/remotes/origin/" + branch);
+            String remoteTip   = safeRemoteTip(repoDir, branch);
+            log.info("[GIT] origin/{}  before-fetch={}  after-fetch={}  remote-actual={}",
+                    branch, beforeFetch, afterFetch, remoteTip);
+            if (remoteTip != null && afterFetch != null && !remoteTip.equals(afterFetch)) {
+                log.warn("[GIT] fetch 未把 refs/remotes/origin/{} 更新到远端 tip，请查网络/权限/hook", branch);
             }
+
             runGit(repoDir, "checkout", "-B", branch, "origin/" + branch);
             runGit(repoDir, "reset", "--hard", "origin/" + branch);
             runGit(repoDir, "clean", "-fd");
@@ -69,8 +79,7 @@ public class BuildLaunchService {
             if (localHead != null) {
                 log.info("[GIT] local HEAD after reset = {}", localHead);
                 if (remoteTip != null && !remoteTip.equals(localHead)) {
-                    log.warn("[GIT] MISMATCH! origin says {} but local HEAD is {} — 请人工检查网络/权限/hook",
-                            remoteTip, localHead);
+                    log.warn("[GIT] MISMATCH! origin says {} but local HEAD is {}", remoteTip, localHead);
                 }
             }
         } else {
