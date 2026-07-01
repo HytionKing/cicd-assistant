@@ -382,3 +382,15 @@
     font-size: 1.4rem;
     vertical-align: -3px;
 }
+
+/* 任务详情：同分支多模块合并单元格。右侧加淡分隔线让分组一目了然，
+ * 顶端加实分隔线区分不同分支块（rowspan cell 本身跨多行 border 不好画，
+ * 用组第一行的 border-top 代替）。 */
+.branch-merged-cell {
+    vertical-align: middle !important;
+    border-right: 1px solid rgba(101, 109, 119, 0.16);
+    background-color: rgba(101, 109, 119, 0.03);
+}
+.branch-group-start > td {
+    border-top: 1px solid rgba(101, 109, 119, 0.24);
+}

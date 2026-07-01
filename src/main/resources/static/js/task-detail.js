@@ -48,12 +48,31 @@ function shortCommitSubject(info) {
       </div>
     `;
 
-    tbody.innerHTML = (d.modules || []).map(m => `
-      <tr>
-        <td>
-          <code>${escapeHtml(m.branch)}</code>
-          ${m.commitSha ? `<div class="mt-1"><small class="text-secondary" title="${escapeHtml(m.commitInfo || m.commitSha)}"><i class="ti ti-git-commit me-1"></i>${escapeHtml((m.commitSha || '').substring(0, 7))}${m.commitInfo ? ' · ' + escapeHtml(shortCommitSubject(m.commitInfo)) : ''}</small></div>` : ''}
-        </td>
+    // 同分支的多个模块合并"分支"列：按 branch 顺序分组，每组第一行渲染带 rowspan 的 branch cell，
+    // 后续行跳过 branch 列。若后端返回顺序不严格连续，也在这里保序聚合一次。
+    const modules = d.modules || [];
+    const groups = [];
+    const byBranch = new Map();
+    for (const m of modules) {
+      let g = byBranch.get(m.branch);
+      if (!g) {
+        g = { branch: m.branch, commitSha: m.commitSha, commitInfo: m.commitInfo, items: [] };
+        byBranch.set(m.branch, g);
+        groups.push(g);
+      }
+      g.items.push(m);
+    }
+
+    const rowsHtml = groups.flatMap(g => g.items.map((m, idx) => {
+      const branchCell = idx === 0 ? `
+        <td rowspan="${g.items.length}" class="branch-merged-cell">
+          <code>${escapeHtml(g.branch)}</code>
+          ${g.commitSha ? `<div class="mt-1"><small class="text-secondary" title="${escapeHtml(g.commitInfo || g.commitSha)}"><i class="ti ti-git-commit me-1"></i>${escapeHtml((g.commitSha || '').substring(0, 7))}${g.commitInfo ? ' · ' + escapeHtml(shortCommitSubject(g.commitInfo)) : ''}</small></div>` : ''}
+        </td>` : '';
+      const rowCls = idx === 0 && g.items.length > 1 ? ' class="branch-group-start"' : '';
+      return `
+      <tr${rowCls}>
+        ${branchCell}
         <td><strong>${escapeHtml(m.moduleName)}</strong></td>
         <td>${statusBadge(m.status)}</td>
         <td>${m.port || ''}</td>
@@ -70,8 +89,10 @@ function shortCommitSubject(info) {
             ${m.status === 'SUCCESS' || m.status === 'RUNNING' ? `<button class="btn btn-sm btn-outline-danger" data-act="stop" data-id="${m.id}"><i class="ti ti-player-stop me-1"></i>停止</button>` : ''}
           </div>
         </td>
-      </tr>
-    `).join('') || '<tr><td colspan="9" class="text-center text-secondary py-4">尚无模块</td></tr>';
+      </tr>`;
+    })).join('');
+
+    tbody.innerHTML = rowsHtml || '<tr><td colspan="9" class="text-center text-secondary py-4">尚无模块</td></tr>';
 
     lastTaskStatus = t.status;
     // 任务进入终态 → 没必要继续 4 秒轮询了
