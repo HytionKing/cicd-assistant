@@ -100,6 +100,47 @@ public class BuildLaunchService {
         if (code != 0) throw new IOException("git " + String.join(" ", args) + " failed, exit=" + code);
     }
 
+    /**
+     * 拉完代码后取一次 HEAD commit 元信息，[sha40, "<sha7> · <msg> · <author> · <relative-time>"]。
+     * 全静默失败，读不到就返回 [null, null]，不影响主流程。
+     */
+    public String[] readHeadInfo(File repoDir) {
+        try {
+            String line = runGitCapture(repoDir, "log", "-1",
+                    "--pretty=format:%H|%h|%s|%an|%cr");
+            if (line == null || line.isEmpty()) return new String[]{null, null};
+            String[] parts = line.split("\\|", 5);
+            String sha = parts.length > 0 ? parts[0] : null;
+            String shortSha = parts.length > 1 ? parts[1] : (sha != null && sha.length() >= 7 ? sha.substring(0, 7) : sha);
+            String subject = parts.length > 2 ? parts[2] : "";
+            String author = parts.length > 3 ? parts[3] : "";
+            String when = parts.length > 4 ? parts[4] : "";
+            StringBuilder info = new StringBuilder();
+            if (shortSha != null) info.append(shortSha);
+            if (!subject.isEmpty()) info.append(" · ").append(subject);
+            if (!author.isEmpty()) info.append(" · ").append(author);
+            if (!when.isEmpty()) info.append(" · ").append(when);
+            return new String[]{sha, info.toString()};
+        } catch (Exception e) {
+            log.warn("[GIT] read HEAD info failed at {}: {}", repoDir.getAbsolutePath(), e.getMessage());
+            return new String[]{null, null};
+        }
+    }
+
+    private String runGitCapture(File dir, String... args) throws IOException, InterruptedException {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("git");
+        cmd.addAll(Arrays.asList(args));
+        ProcessBuilder pb = new ProcessBuilder(cmd).directory(dir).redirectErrorStream(false);
+        Process p = pb.start();
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        drain(p.getInputStream(), bo);
+        drain(p.getErrorStream(), null);
+        int code = p.waitFor();
+        if (code != 0) throw new IOException("git " + String.join(" ", args) + " failed, exit=" + code);
+        return new String(bo.toByteArray(), StandardCharsets.UTF_8).trim();
+    }
+
     public List<ModuleScanner.Module> scanModules(File repoRoot, String specified) {
         List<ModuleScanner.Module> all = ModuleScanner.scan(repoRoot);
         if (StringUtils.isBlank(specified)) return all;

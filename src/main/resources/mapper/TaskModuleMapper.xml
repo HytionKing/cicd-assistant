@@ -20,6 +20,8 @@
         <result property="createdAt" column="created_at"/>
         <result property="startedAt" column="started_at"/>
         <result property="finishedAt" column="finished_at"/>
+        <result property="commitSha" column="commit_sha"/>
+        <result property="commitInfo" column="commit_info"/>
     </resultMap>
 
     <select id="findByTaskId" resultMap="TaskModuleResult">
@@ -45,11 +47,11 @@
         INSERT INTO task_module (
             task_id, branch, module_name, module_path, status, port, pid, pgid,
             log_file, build_log_file, swagger_url, error_message, keep_alive_until,
-            created_at, started_at, finished_at
+            created_at, started_at, finished_at, commit_sha, commit_info
         ) VALUES (
             #{taskId}, #{branch}, #{moduleName}, #{modulePath}, #{status}, #{port}, #{pid}, #{pgid},
             #{logFile}, #{buildLogFile}, #{swaggerUrl}, #{errorMessage}, #{keepAliveUntil},
-            #{createdAt}, #{startedAt}, #{finishedAt}
+            #{createdAt}, #{startedAt}, #{finishedAt}, #{commitSha}, #{commitInfo}
         )
     </insert>
 
@@ -65,7 +67,9 @@
             error_message = #{errorMessage},
             keep_alive_until = #{keepAliveUntil},
             started_at = #{startedAt},
-            finished_at = #{finishedAt}
+            finished_at = #{finishedAt},
+            commit_sha = #{commitSha},
+            commit_info = #{commitInfo}
         WHERE id = #{id}
     </update>
 

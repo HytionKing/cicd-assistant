@@ -149,8 +149,17 @@ public class TaskService {
                     taskModuleMapper.update(placeholder);
                 }
                 File repoRoot = buildLaunchService.ensureRepoClone(repo, branch);
+                // 拉完就抓 HEAD commit 信息（sha + subject + author + 相对时间），后面所有模块行都盖同一份
+                String[] head = buildLaunchService.readHeadInfo(repoRoot);
+                String commitSha = head[0];
+                String commitInfo = head[1];
+                if (commitInfo != null) {
+                    log.info("[TASK#{}] branch={} HEAD -> {}", taskId, branch, commitInfo);
+                }
                 if (placeholder != null) {
                     placeholder.setStatus("SCANNING");
+                    placeholder.setCommitSha(commitSha);
+                    placeholder.setCommitInfo(commitInfo);
                     taskModuleMapper.update(placeholder);
                 }
                 List<ModuleScanner.Module> modules = buildLaunchService.scanModules(repoRoot, task.getModules());
@@ -180,6 +189,8 @@ public class TaskService {
                     TaskModule pre = newModuleRow(taskId, branch, mod, buildLogPath.toString());
                     pre.setStatus("BUILDING");
                     pre.setStartedAt(now());
+                    pre.setCommitSha(commitSha);
+                    pre.setCommitInfo(commitInfo);
                     taskModuleMapper.update(pre);
                 }
 
@@ -190,6 +201,8 @@ public class TaskService {
                         tm.setStatus("FAILED");
                         tm.setErrorMessage("maven build failed");
                         tm.setFinishedAt(now());
+                        tm.setCommitSha(commitSha);
+                        tm.setCommitInfo(commitInfo);
                         taskModuleMapper.update(tm);
                         totalCount++;
                     }
@@ -202,6 +215,8 @@ public class TaskService {
                     TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
                     tm.setStatus("STARTING");
                     tm.setStartedAt(now());
+                    tm.setCommitSha(commitSha);
+                    tm.setCommitInfo(commitInfo);
                     taskModuleMapper.update(tm);
 
                     Integer port = portPool.acquire();
