@@ -55,10 +55,24 @@ public class BuildLaunchService {
         long t0 = System.currentTimeMillis();
         if (new File(repoDir, ".git").exists()) {
             log.info("[GIT] reuse workspace, fetch+reset branch={} dir={}", branch, repoDir.getAbsolutePath());
-            runGit(repoDir, "fetch", "origin", branch);
+            // 先 fetch 拉最新，再问 origin 侧的 tip，再 reset。这样"MR 没到 origin"跟"拉取有 bug"就
+            // 能在日志里一眼分开。ls-remote 才是真的问远端，不经本地引用缓存。
+            runGit(repoDir, "fetch", "--prune", "origin", branch);
+            String remoteTip = safeRemoteTip(repoDir, branch);
+            if (remoteTip != null) {
+                log.info("[GIT] origin/{} tip = {}", branch, remoteTip);
+            }
             runGit(repoDir, "checkout", "-B", branch, "origin/" + branch);
             runGit(repoDir, "reset", "--hard", "origin/" + branch);
             runGit(repoDir, "clean", "-fd");
+            String localHead = safeRevParse(repoDir, "HEAD");
+            if (localHead != null) {
+                log.info("[GIT] local HEAD after reset = {}", localHead);
+                if (remoteTip != null && !remoteTip.equals(localHead)) {
+                    log.warn("[GIT] MISMATCH! origin says {} but local HEAD is {} — 请人工检查网络/权限/hook",
+                            remoteTip, localHead);
+                }
+            }
         } else {
             log.info("[GIT] clone branch={} into {}", branch, repoDir.getAbsolutePath());
             File parent = repoDir.getParentFile();
@@ -69,9 +83,33 @@ public class BuildLaunchService {
             drain(p.getInputStream(), null);
             int code = p.waitFor();
             if (code != 0) throw new IOException("git clone failed, exit=" + code);
+            String localHead = safeRevParse(repoDir, "HEAD");
+            if (localHead != null) log.info("[GIT] cloned HEAD = {}", localHead);
         }
         log.info("[GIT] branch={} ready, cost={}s", branch, (System.currentTimeMillis() - t0) / 1000);
         return repoDir;
+    }
+
+    /** 静默调 {@code git ls-remote origin refs/heads/<branch>} 拿远端 tip；失败返回 null 不影响主流程。 */
+    private String safeRemoteTip(File repoDir, String branch) {
+        try {
+            String out = runGitCapture(repoDir, "ls-remote", "origin", "refs/heads/" + branch);
+            if (out == null || out.isEmpty()) return null;
+            String[] parts = out.trim().split("\\s+", 2);
+            return parts.length > 0 ? parts[0] : null;
+        } catch (Exception e) {
+            log.debug("[GIT] ls-remote failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String safeRevParse(File repoDir, String ref) {
+        try {
+            String out = runGitCapture(repoDir, "rev-parse", ref);
+            return out == null ? null : out.trim();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String buildAuthGitUrl(Repo repo) {
