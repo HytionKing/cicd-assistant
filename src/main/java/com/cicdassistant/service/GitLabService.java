@@ -1,5 +1,6 @@
 package com.cicdassistant.service;
 
+import com.cicdassistant.config.AppProperties;
 import com.cicdassistant.entity.Repo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -12,6 +13,7 @@ import org.gitlab4j.api.models.MergeRequestFilter;
 import org.gitlab4j.api.models.Version;
 import org.springframework.stereotype.Service;
 
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,6 +21,26 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class GitLabService {
+
+    private final AppProperties appProperties;
+
+    public GitLabService(AppProperties appProperties) {
+        this.appProperties = appProperties;
+    }
+
+    /**
+     * 从配置里拿"今天"参照时区。非法值降级到 Asia/Shanghai 而不是 systemDefault，
+     * 避免"服务器 UTC → LocalDate.now() 跨日切"导致北京用户漏 MR 的老坑。
+     */
+    private ZoneId resolveZone() {
+        String tz = appProperties.getCompare().getTimezone();
+        if (StringUtils.isBlank(tz)) return ZoneId.of("Asia/Shanghai");
+        try { return ZoneId.of(tz.trim()); }
+        catch (Exception e) {
+            log.warn("[GITLAB] app.compare.timezone={} 无效，回退到 Asia/Shanghai", tz);
+            return ZoneId.of("Asia/Shanghai");
+        }
+    }
 
     public List<String> listBranches(Repo repo) throws GitLabApiException {
         if (StringUtils.isBlank(repo.getGitlabHost()) || StringUtils.isBlank(repo.getProjectPath())) {
@@ -58,8 +80,11 @@ public class GitLabService {
             // 服务端先粗筛，本地再按 mergedAt 严格过滤一次（updated_at 可能晚于 mergedAt，但不会早于）
             java.util.Date todayStart = null;
             if (todayOnly) {
+                ZoneId zone = resolveZone();
                 todayStart = java.util.Date.from(
-                        java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+                        java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant());
+                log.info("[GITLAB] mr today-only zone={} cutoff={} (server-local={})",
+                        zone, todayStart.toInstant(), todayStart);
                 try {
                     java.lang.reflect.Method m = f.getClass().getMethod("withUpdatedAfter", java.util.Date.class);
                     m.invoke(f, todayStart);
@@ -71,9 +96,12 @@ public class GitLabService {
             if (!todayOnly || todayStart == null) return raw;
             // 本地按 mergedAt 严格过滤：updated_after 是个 hint，可能放进一些昨天合的但今天有评论的
             java.util.Date cutoff = todayStart;
-            return raw.stream()
+            List<MergeRequest> filtered = raw.stream()
                     .filter(m -> m.getMergedAt() != null && !m.getMergedAt().before(cutoff))
                     .collect(java.util.stream.Collectors.toList());
+            log.info("[GITLAB] mr today-only branch={} raw={} kept={} (dropped={})",
+                    targetBranch, raw.size(), filtered.size(), raw.size() - filtered.size());
+            return filtered;
         }
     }
 

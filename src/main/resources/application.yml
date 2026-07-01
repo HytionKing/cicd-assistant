@@ -77,8 +77,8 @@ app:
     max-concurrent: 2
     # 单个模块从 java -jar 启动到日志出现 "Started XxxApplication in" 的最长等待时间。
     # 这个时间包含 JVM 冷启动、Spring 容器初始化、Nacos 配置拉取、DB 连接、所有 @PostConstruct。
-    # 含 Nacos / 大量 bean / DB 迁移的服务建议给到 600~900。
-    startup-timeout-seconds: 600
+    # 5 分钟对绝大多数 SpringBoot 服务够用；含 Nacos / 大量 bean / DB 迁移的重服务需要拉长可改到 600~900。
+    startup-timeout-seconds: 300
     build-timeout-seconds: 1800
   health-check:
     actuator-path: "/actuator/health"
@@ -102,6 +102,9 @@ app:
     workspace-root: ./workspace-compare
     mr-fetch-default-limit: 20
     async-pool-size: 2
+    # "今天"日切参照的时区。服务器可能是 UTC，用户是北京时间，两者不一致会漏 MR。
+    # 默认 Asia/Shanghai；跨国团队可改成 UTC 或自己所在时区。
+    timezone: Asia/Shanghai
     llm:
       enabled: false
       base-url: ""                       # OpenAI 兼容协议，例如 http://10.x.x.x:8000
