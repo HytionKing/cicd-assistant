@@ -394,3 +394,8 @@
 .branch-group-start > td {
     border-top: 1px solid rgba(101, 109, 119, 0.24);
 }
+/* 续行的第一 td 是模块列，被 card-table 的 :first-child 规则塞了 1.25rem 左内边距，
+ * 手动压回普通 td padding 让它和首行模块列对齐。 */
+.card-table tbody tr.branch-group-continue > td:first-child {
+    padding-left: 0.5rem;
+}

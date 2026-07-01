@@ -69,7 +69,11 @@ function shortCommitSubject(info) {
           <code>${escapeHtml(g.branch)}</code>
           ${g.commitSha ? `<div class="mt-1"><small class="text-secondary" title="${escapeHtml(g.commitInfo || g.commitSha)}"><i class="ti ti-git-commit me-1"></i>${escapeHtml((g.commitSha || '').substring(0, 7))}${g.commitInfo ? ' · ' + escapeHtml(shortCommitSubject(g.commitInfo)) : ''}</small></div>` : ''}
         </td>` : '';
-      const rowCls = idx === 0 && g.items.length > 1 ? ' class="branch-group-start"' : '';
+      // 续行少了 branch td，它自己的模块 td 会被 card-table 当成 :first-child 塞 1.25rem 左内边距，
+      // 视觉上比首行的模块列多缩进一截。branch-group-continue 覆盖回普通 td 的左内边距对齐首行。
+      const rowCls = idx === 0
+        ? (g.items.length > 1 ? ' class="branch-group-start"' : '')
+        : ' class="branch-group-continue"';
       return `
       <tr${rowCls}>
         ${branchCell}
