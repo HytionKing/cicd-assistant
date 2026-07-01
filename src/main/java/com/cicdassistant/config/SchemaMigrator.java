@@ -28,6 +28,9 @@ public class SchemaMigrator implements ApplicationRunner {
         ensureColumn("repo", "modules", "TEXT");
         // P4：钉钉加签可选
         ensureColumn("notification_webhook", "secret", "TEXT");
+        // 每次启动拉到的 commit sha + 描述，便于用户核对是不是最新代码
+        ensureColumn("task_module", "commit_sha", "TEXT");
+        ensureColumn("task_module", "commit_info", "TEXT");
     }
 
     private void ensureColumn(String table, String column, String type) {

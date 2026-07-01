@@ -21,4 +21,8 @@ public class TaskModule {
     private String createdAt;
     private String startedAt;
     private String finishedAt;
+    /** 本次拉到的 git commit sha（40 位全量）。让用户一眼确认拉的是不是最新提交。 */
+    private String commitSha;
+    /** 本次拉到的 commit 首行 message + 作者 + 相对时间，纯展示用。 */
+    private String commitInfo;
 }

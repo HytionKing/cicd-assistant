@@ -1,3 +1,12 @@
+/** commit_info 是 "<sha7> · <subject> · <author> · <relative-time>" 拼出来的，
+ *  在窄的"分支"列里全展开会溢出。只取 subject 段，剩下的靠 title 悬浮显示完整。 */
+function shortCommitSubject(info) {
+  if (!info) return '';
+  const parts = info.split(' · ');
+  const subject = parts[1] || '';
+  return subject.length > 24 ? subject.substring(0, 24) + '…' : subject;
+}
+
 (async function () {
   const taskId = document.getElementById('task-id').textContent;
   const summary = document.getElementById('task-summary');
@@ -41,7 +50,10 @@
 
     tbody.innerHTML = (d.modules || []).map(m => `
       <tr>
-        <td><code>${escapeHtml(m.branch)}</code></td>
+        <td>
+          <code>${escapeHtml(m.branch)}</code>
+          ${m.commitSha ? `<div class="mt-1"><small class="text-secondary" title="${escapeHtml(m.commitInfo || m.commitSha)}"><i class="ti ti-git-commit me-1"></i>${escapeHtml((m.commitSha || '').substring(0, 7))}${m.commitInfo ? ' · ' + escapeHtml(shortCommitSubject(m.commitInfo)) : ''}</small></div>` : ''}
+        </td>
         <td><strong>${escapeHtml(m.moduleName)}</strong></td>
         <td>${statusBadge(m.status)}</td>
         <td>${m.port || ''}</td>
