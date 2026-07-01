@@ -9,7 +9,7 @@
 1. **代码启动**：拉分支 → mvn 编译 → java -jar 启动 → 探测 actuator/swagger，确认服务能起
 2. **合并检测**（开发中）：MR 上线前，把基准分支（develop/uat）和被对比分支（env-*）做语义级 diff，输出报告推钉钉
 
-仓库：`hytionking/cicd-assistant`，**所有开发都在分支 `claude/charming-dijkstra-8d8IU`**。
+仓库：`hytionking/cicd-assistant`。当前开发分支由 session 分配，看系统提示"Git Development Branch Requirements"那节。历史两个已并入 main 的分支：`claude/charming-dijkstra-8d8IU`、`claude/zen-allen-j1s6zj`。
 
 ## 硬性技术约束（不要换）
 
@@ -200,11 +200,93 @@ java -cp /tmp:target/classes:$(find ~/.m2 -name 'javaparser-core*.jar' -o -name 
   - 新增 "每分支拉取 N 条" 输入（默认值来自配置，可在 1~100 间调）
   - 勾了任意 MR 时，基准分支 label 会出现灰字 "(MR 模式下仅作上下文参照)"
 
+## P3.x 后续迭代（✅ 已完成，本节按时间倒序记录关键决策，方便新 agent 回溯）
+
+### PatchHunkVerifier 三次算法演进（读这段能省很多返工）
+
+**问题现象一路诊断出来的算法演进史**：
+
+1. **初版：整文件折叠 substring 匹配** —— 把 target 全文 `replaceAll("\\s+"," ")` 折成一条字符串，patch 每一 +/- 行也归一化后 substring 找。**噪音爆炸**：`return resultMap;` 之类常用短语在 target 的任何其它方法里都会命中，"漏删"变假阳性
+2. **改进：block-with-context 严格连续** —— 要求 patch 里连续的 +/- 块作为一个整体，在 target essential 行序列里连续出现。对 66 行大新增大量误报 —— env 常在两个新增方法之间夹了别人的方法，block 不再 contiguous
+3. **最终：per-line + 3 行小窗口** —— 每条 +/- 行 self + 一个 prev/next 邻居；target 上找到 self 的位置 k，只要 prev 在 target[k-3..k-1] 或 next 在 target[k+1..k+3] 出现就算命中。CONTEXT_WINDOW=3 容忍 2 行无关插入
+4. **再加两层减法**（针对 lingering 假阳性）：
+   - **M1 · Move 检测**：同 patch 内 `+` 集合里的字面就不查 lingering —— 成员变量重排 / import 调序 / 方法移位不算漏删
+   - **M2 · Scope 锚定**：hunk 头 `@@ ... @@ <xfuncname>` 拿到 scope（`type:X` / `method:name` / `select:id`）；target 命中位置回走找同种 structural 行，scope 对不上就跳过。Java 方法用 modifier + `(...)` + 排除 `if/for/while/catch` 之类正则识别
+
+### 三明治 LLM prompt（HYBRID+MR、LLM+MR 两条路都用）
+
+- `MrInfo`：source 分支名 + 文件改动列表
+- `MrFileListFetcher.infoOf` 一次拿全，`CompareEngine.runOneTarget` 入口把所有 MR 的 source 分支收集起来一起 `git fetch`
+- source 分支 fetch 用 `fetchBranchesBestEffort`（合并 → 逐个 fallback → 全 WARN 不抛），因为 MR merge 后 GitLab 常自动删源分支
+- `LlmPromptBuilder.buildUserForThreeWayReview`：
+  - patch（意图，8000 字符上限）
+  - source 全文（"应该长成的样子"，带行号）
+  - target 全文（"实际样子"，带行号）
+  - 二者合计 ≤ 17000 字符 → 都塞全文；超了 → 各自降级到 patch @@ 位置 ±30 行窗口
+  - source 拿不到（分支已删/API 失败）→ 透明退回 `buildUserForPatchReview`（patch + target 窗口）
+- HYBRID 走这条时会追加"规则怀疑点 + AI 否决协议"；纯 LLM 模式 `ruleFindings=null`，不出现规则段（也不会让 LLM 编造"AI 否决"）
+- `LlmClient.populateCitedSnippet` 解析 AI 评语里"目标分支第 N 行"/"源分支第 N~M 行"回填到 `baselineSnippet`/`targetSnippet`，滑窗遇到下一个"分支"关键字截止避免侧别串味儿
+- 前端 detail 弹窗对 LLM finding 单独渲染"AI 引用的源/目标分支代码（带行号）"两块
+
+### LLM JSON 截断救援
+
+- Response 被 `max_tokens` 切断（默认 4096 → 提到 8192）
+- `LlmClient.extractMessageContent` 读 `choice.finish_reason`；`length` 时走 `salvageTruncatedJson`
+- 找最后一个完整 `}`，扫前缀里未闭合的 `{`/`[` 数量，按缺补齐。已完成的对象都保留，只丢截断的末条
+- 字符串感知（`"` + `\` 转义），不会把字面量里的 `{` 也算进去
+
+### 布局 / 前端 / P4 P5 小改（合到一起说）
+
+**P4 · 钉钉真发**：
+- `DingTalkSender`：HmacSHA256 加签（可选 `secret` 字段，`SchemaMigrator` 加列），sendText/sendMarkdown 双入口
+- `CompareNotifier`：任务终态时组装 markdown（emoji+仓库+基准+模式+整体状态+各目标分支 err/warn/info 计数+错误消息预览+详情链接），受 `notify.message-max-chars` 截断
+- 详情链接的 host 用 `publicHost()`：注入 `server.port`，配置只写 host（如 `10.0.80.123`）自动补 `:8080`，配了完整 URL 就原样用
+- `NotificationWebhookService.sendTest` 也走 `DingTalkSender`，测试按钮同时验证签名
+
+**P5.1 侧栏底部美化**：
+- `sidebar-footer` + `sidebar-footer-link` 样式，两行 flat 布局，顶上分隔线
+- 意见反馈 URL = `app.feedback-url` 配置，**空就不渲染**（不做默认 GitHub Issues 兜底）
+- 退出按钮 hover 变红
+- CSS 二级菜单缩进从 2.5rem → 3.25rem，特异性提到 6 层 class 才能压过 Tabler 自带的 5 层
+- 侧栏加 `overflow-x: hidden` + `::-webkit-scrollbar` 自定义（thin/transparent）解决空轨占位
+
+**P5.2 · MR "只看今天合并的"**：
+- 创建任务页复选框 → `&todayOnly=true`
+- `GitLabService.listRecentMergedMrs(repo, branch, limit, todayOnly)` 用 `MergeRequestFilter.withUpdatedAfter` 做服务端粗筛（gitlab4j 4.19 有这方法），本地按 `mergedAt` 严格过滤
+- **时区必须用配置的**：`app.compare.timezone`（默认 `Asia/Shanghai`），不能用 `ZoneId.systemDefault()` —— 服务器 UTC + 用户北京 = 日切错 8 小时，会漏"今天早上"的 MR 或塞进"昨天下午"的 MR
+- 日志 `[GITLAB] mr today-only zone=... cutoff=... raw=N kept=M dropped=K`，排查用
+
+**P5.3 · 自定义被对比分支前缀**：
+- 前缀输入框 + 对勾按钮，值存 `localStorage` key `compare.targetPrefix`（默认 `env-`）
+- `renderTargets` 按当前前缀勾选，可点对勾重新按新前缀勾一遍不用重拉分支
+
+### 代码启动模块（launch）几个关键修复
+
+**commit sha 展示**：
+- `task_module` 加 `commit_sha` + `commit_info` 两列，`SchemaMigrator` 幂等 ALTER
+- `BuildLaunchService.readHeadInfo`：`git log -1 --pretty=format:%H|%h|%s|%an|%cr`，软失败
+- 任务详情页分支列下方多一行 sha7 + 短 subject，`title=` 显示全 info
+
+**git fetch 顽疾（这次踩到的最坑）**：
+- 症状：**reuse workspace 拉不到新 commit，fresh clone 就正常**
+- 根因：`git fetch origin <branch>` 裸 branch 名，只在本地 `.git/config` 的 `remote.origin.fetch` 有匹配 refspec 时才更新 `refs/remotes/origin/<branch>`；config 被清空或改窄了，就只更新 `FETCH_HEAD`，接下来 `reset --hard origin/<branch>` 用的还是**上次的 ref**
+- 修法：`ensureRepoClone` 用显式 refspec `+refs/heads/<b>:refs/remotes/origin/<b>`，绕开 config
+- 加了 `[GIT] origin/<b> before-fetch=... after-fetch=... remote-actual=...` 三态日志，出问题一 grep 就定位
+
+**其它 launch 小改**：
+- 启动超时默认 `startup-timeout-seconds: 600 → 300`（Nacos/重服务再手动加长）
+- source 分支 `fetchBranchesBestEffort`（合并→逐个 fallback）应对 GitLab 自动删源分支
+
+## 关于业务侧循环依赖
+
+用户遇到过：launch 起业务服务时 `Bean with name 'asyncService' has been injected into other beans [xxxServiceImpl] in its raw version as part of a circular reference, but has eventually been wrapped`。**cicd-assistant 侧无解**，`-Dspring.main.allow-circular-references=true` 只放过第一步，@Async CGLIB 代理创建时 raw vs proxy 不一致仍会拒绝。**必须让业务在注 `AsyncService` 的字段上加 `@Lazy`**。文档里我给用户贴了 grep 命令批量定位。
+
 ## 当前状态
 
-- P1+P2+P3 + MR-patch 验证已完成
-- 侧栏 2 级 collapse 已修好（之前用 dropdown-menu 嵌套 + 双 BS 监听都踩过）
-- 下一步是 P4（钉钉真实推送）
+- P1 + P2 + P3 (含 MR patch verifier 多轮迭代 + 三明治 LLM prompt + JSON 截断救援) + P4 + P5 都已完成
+- launch 模块加了 commit sha 显示 + fetch refspec 修复 + 超时默认改 300s
+- 侧栏 2 级 collapse 早已修好
+- 下一步没规划，等用户提
 
 ## 给新 agent 的工作守则
 
