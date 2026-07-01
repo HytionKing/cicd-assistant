@@ -30,6 +30,12 @@ public class AppProperties {
         private String workspaceRoot = "./workspace-compare";
         private int mrFetchDefaultLimit = 20;
         private int asyncPoolSize = 2;
+        /**
+         * "今天"这个概念的时区参考。默认 Asia/Shanghai（本项目目标用户）。
+         * 服务器可能跑在 UTC 上，用户想看的是自己本地时区的"今天"，两者不一致会漏 MR。
+         * 有效值：任意 java.time.ZoneId 支持的标识符（如 Asia/Shanghai / UTC / Europe/Berlin）。
+         */
+        private String timezone = "Asia/Shanghai";
         private Llm llm = new Llm();
         private Notify notify = new Notify();
     }

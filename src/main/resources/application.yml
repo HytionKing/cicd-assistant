@@ -102,6 +102,9 @@ app:
     workspace-root: ./workspace-compare
     mr-fetch-default-limit: 20
     async-pool-size: 2
+    # "今天"日切参照的时区。服务器可能是 UTC，用户是北京时间，两者不一致会漏 MR。
+    # 默认 Asia/Shanghai；跨国团队可改成 UTC 或自己所在时区。
+    timezone: Asia/Shanghai
     llm:
       enabled: false
       base-url: ""                       # OpenAI 兼容协议，例如 http://10.x.x.x:8000
