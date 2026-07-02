@@ -25,4 +25,6 @@ public class TaskModule {
     private String commitSha;
     /** 本次拉到的 commit 首行 message + 作者 + 相对时间，纯展示用。 */
     private String commitInfo;
+    /** GitLab merge commit body 里挖到的 MR iid（不带 ! 前缀），非 GitLab / 非 merge commit 时为 null。 */
+    private String commitMrIid;
 }

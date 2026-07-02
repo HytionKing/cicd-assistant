@@ -1,10 +1,9 @@
 /** commit_info 是 "<sha7> · <subject> · <author> · <relative-time>" 拼出来的，
- *  在窄的"分支"列里全展开会溢出。只取 subject 段，剩下的靠 title 悬浮显示完整。 */
-function shortCommitSubject(info) {
+ *  只取 subject 段用于副行显示；宽度自适应交给 CSS line-clamp。 */
+function commitSubject(info) {
   if (!info) return '';
   const parts = info.split(' · ');
-  const subject = parts[1] || '';
-  return subject.length > 24 ? subject.substring(0, 24) + '…' : subject;
+  return parts[1] || '';
 }
 
 (async function () {
@@ -56,7 +55,13 @@ function shortCommitSubject(info) {
     for (const m of modules) {
       let g = byBranch.get(m.branch);
       if (!g) {
-        g = { branch: m.branch, commitSha: m.commitSha, commitInfo: m.commitInfo, items: [] };
+        g = {
+          branch: m.branch,
+          commitSha: m.commitSha,
+          commitInfo: m.commitInfo,
+          commitMrIid: m.commitMrIid,
+          items: []
+        };
         byBranch.set(m.branch, g);
         groups.push(g);
       }
@@ -64,10 +69,29 @@ function shortCommitSubject(info) {
     }
 
     const rowsHtml = groups.flatMap(g => g.items.map((m, idx) => {
+      // 分支列内容：分支名 + 顶行(sha + MR 徽章) + 副行(subject，用 CSS line-clamp 跟随列宽自适应，最多 2 行)
+      let commitBlock = '';
+      if (g.commitSha) {
+        const short = escapeHtml((g.commitSha || '').substring(0, 7));
+        const mrBadge = g.commitMrIid
+          ? `<span class="commit-mr-badge" title="Merge Request !${escapeHtml(g.commitMrIid)}">!${escapeHtml(g.commitMrIid)}</span>`
+          : '';
+        const subject = commitSubject(g.commitInfo);
+        const subjectLine = subject
+          ? `<div class="commit-subject" title="${escapeHtml(g.commitInfo || '')}">${escapeHtml(subject)}</div>`
+          : '';
+        commitBlock = `
+          <div class="commit-meta mt-1" title="${escapeHtml(g.commitInfo || g.commitSha)}">
+            <i class="ti ti-git-commit"></i>
+            <span class="commit-sha">${short}</span>
+            ${mrBadge}
+          </div>
+          ${subjectLine}`;
+      }
       const branchCell = idx === 0 ? `
         <td rowspan="${g.items.length}" class="branch-merged-cell">
           <code>${escapeHtml(g.branch)}</code>
-          ${g.commitSha ? `<div class="mt-1"><small class="text-secondary" title="${escapeHtml(g.commitInfo || g.commitSha)}"><i class="ti ti-git-commit me-1"></i>${escapeHtml((g.commitSha || '').substring(0, 7))}${g.commitInfo ? ' · ' + escapeHtml(shortCommitSubject(g.commitInfo)) : ''}</small></div>` : ''}
+          ${commitBlock}
         </td>` : '';
       // 续行少了 branch td，它自己的模块 td 会被 card-table 当成 :first-child 塞 1.25rem 左内边距，
       // 视觉上比首行的模块列多缩进一截。branch-group-continue 覆盖回普通 td 的左内边距对齐首行。

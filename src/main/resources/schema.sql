@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS task_module (
     started_at TEXT,
     finished_at TEXT,
     commit_sha TEXT,
-    commit_info TEXT
+    commit_info TEXT,
+    commit_mr_iid TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_module_task_id ON task_module(task_id);

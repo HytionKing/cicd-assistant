@@ -31,6 +31,8 @@ public class SchemaMigrator implements ApplicationRunner {
         // 每次启动拉到的 commit sha + 描述，便于用户核对是不是最新代码
         ensureColumn("task_module", "commit_sha", "TEXT");
         ensureColumn("task_module", "commit_info", "TEXT");
+        // GitLab merge commit body 里能挖出的 MR iid（!123），用户希望在分支列一起展示
+        ensureColumn("task_module", "commit_mr_iid", "TEXT");
     }
 
     private void ensureColumn(String table, String column, String type) {

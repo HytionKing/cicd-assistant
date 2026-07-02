@@ -153,13 +153,16 @@ public class TaskService {
                 String[] head = buildLaunchService.readHeadInfo(repoRoot);
                 String commitSha = head[0];
                 String commitInfo = head[1];
+                String commitMrIid = head.length > 2 ? head[2] : null;
                 if (commitInfo != null) {
-                    log.info("[TASK#{}] branch={} HEAD -> {}", taskId, branch, commitInfo);
+                    log.info("[TASK#{}] branch={} HEAD -> {}{}", taskId, branch, commitInfo,
+                            commitMrIid != null ? " (!" + commitMrIid + ")" : "");
                 }
                 if (placeholder != null) {
                     placeholder.setStatus("SCANNING");
                     placeholder.setCommitSha(commitSha);
                     placeholder.setCommitInfo(commitInfo);
+                    placeholder.setCommitMrIid(commitMrIid);
                     taskModuleMapper.update(placeholder);
                 }
                 List<ModuleScanner.Module> modules = buildLaunchService.scanModules(repoRoot, task.getModules());
@@ -191,6 +194,7 @@ public class TaskService {
                     pre.setStartedAt(now());
                     pre.setCommitSha(commitSha);
                     pre.setCommitInfo(commitInfo);
+                    pre.setCommitMrIid(commitMrIid);
                     taskModuleMapper.update(pre);
                 }
 
@@ -203,6 +207,7 @@ public class TaskService {
                         tm.setFinishedAt(now());
                         tm.setCommitSha(commitSha);
                         tm.setCommitInfo(commitInfo);
+                        tm.setCommitMrIid(commitMrIid);
                         taskModuleMapper.update(tm);
                         totalCount++;
                     }
@@ -217,6 +222,7 @@ public class TaskService {
                     tm.setStartedAt(now());
                     tm.setCommitSha(commitSha);
                     tm.setCommitInfo(commitInfo);
+                    tm.setCommitMrIid(commitMrIid);
                     taskModuleMapper.update(tm);
 
                     Integer port = portPool.acquire();

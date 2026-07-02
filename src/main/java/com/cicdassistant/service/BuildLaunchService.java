@@ -148,15 +148,25 @@ public class BuildLaunchService {
     }
 
     /**
-     * 拉完代码后取一次 HEAD commit 元信息，[sha40, "<sha7> · <msg> · <author> · <relative-time>"]。
-     * 全静默失败，读不到就返回 [null, null]，不影响主流程。
+     * 拉完代码后取一次 HEAD commit 元信息，[sha40, "<sha7> · <msg> · <author> · <relative-time>", mrIid]。
+     * mrIid 从 subject + body 里抠 GitLab 惯例的 "!<数字>"（默认 merge commit body 会带
+     * "See merge request group/project!123"），非 GitLab / 非 merge commit 时为 null。
+     * 全静默失败，读不到就返回 [null, null, null]，不影响主流程。
      */
     public String[] readHeadInfo(File repoDir) {
         try {
-            String line = runGitCapture(repoDir, "log", "-1",
-                    "--pretty=format:%H|%h|%s|%an|%cr");
-            if (line == null || line.isEmpty()) return new String[]{null, null};
-            String[] parts = line.split("\\|", 5);
+            // 用 %x1f (Unit Separator) 分隔 head 段和 body，避免 subject/body 里的 | 把字段切乱
+            String raw = runGitCapture(repoDir, "log", "-1",
+                    "--pretty=format:%H|%h|%s|%an|%cr%x1f%b");
+            if (raw == null || raw.isEmpty()) return new String[]{null, null, null};
+            String head = raw;
+            String body = "";
+            int usIdx = raw.indexOf('\u001f');
+            if (usIdx >= 0) {
+                head = raw.substring(0, usIdx);
+                body = raw.substring(usIdx + 1);
+            }
+            String[] parts = head.split("\\|", 5);
             String sha = parts.length > 0 ? parts[0] : null;
             String shortSha = parts.length > 1 ? parts[1] : (sha != null && sha.length() >= 7 ? sha.substring(0, 7) : sha);
             String subject = parts.length > 2 ? parts[2] : "";
@@ -167,11 +177,28 @@ public class BuildLaunchService {
             if (!subject.isEmpty()) info.append(" · ").append(subject);
             if (!author.isEmpty()) info.append(" · ").append(author);
             if (!when.isEmpty()) info.append(" · ").append(when);
-            return new String[]{sha, info.toString()};
+            String mrIid = extractMrIid(subject, body);
+            return new String[]{sha, info.toString(), mrIid};
         } catch (Exception e) {
             log.warn("[GIT] read HEAD info failed at {}: {}", repoDir.getAbsolutePath(), e.getMessage());
-            return new String[]{null, null};
+            return new String[]{null, null, null};
         }
+    }
+
+    // GitLab 默认 merge commit 里写 "See merge request group/project!123"；有些团队自定义模板
+    // 只留 "!123" 或写在 subject 尾部。先卡关键字更精准，找不到再宽松兜底。
+    private static final java.util.regex.Pattern MR_IID_STRICT =
+            java.util.regex.Pattern.compile("(?i)merge request\\s+\\S*!(\\d+)");
+    private static final java.util.regex.Pattern MR_IID_LOOSE =
+            java.util.regex.Pattern.compile("(?<![\\w/])!(\\d{1,7})\\b");
+
+    private String extractMrIid(String subject, String body) {
+        String combined = (subject == null ? "" : subject) + "\n" + (body == null ? "" : body);
+        java.util.regex.Matcher m = MR_IID_STRICT.matcher(combined);
+        if (m.find()) return m.group(1);
+        m = MR_IID_LOOSE.matcher(combined);
+        if (m.find()) return m.group(1);
+        return null;
     }
 
     private String runGitCapture(File dir, String... args) throws IOException, InterruptedException {

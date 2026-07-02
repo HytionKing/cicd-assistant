@@ -399,3 +399,44 @@
 .card-table tbody tr.branch-group-continue > td:first-child {
     padding-left: 0.5rem;
 }
+
+/* 分支列的 commit 元信息 —— sha 和 MR iid 徽章一行内联 */
+.branch-merged-cell .commit-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--tblr-secondary);
+    line-height: 1.2;
+}
+.branch-merged-cell .commit-meta .ti {
+    font-size: 0.9rem;
+}
+.branch-merged-cell .commit-sha {
+    font-family: var(--tblr-font-monospace, monospace);
+}
+.commit-mr-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.4rem;
+    font-family: var(--tblr-font-monospace, monospace);
+    font-size: 0.7rem;
+    line-height: 1.4;
+    color: #ae3ec9;
+    background-color: rgba(174, 62, 201, 0.1);
+    border: 1px solid rgba(174, 62, 201, 0.28);
+    border-radius: 3px;
+    white-space: nowrap;
+}
+/* subject 副行：跟随分支列宽度自适应，最多 2 行，溢出省略号 */
+.branch-merged-cell .commit-subject {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    margin-top: 0.15rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: var(--tblr-secondary);
+}
