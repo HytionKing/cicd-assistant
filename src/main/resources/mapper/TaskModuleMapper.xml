@@ -22,6 +22,7 @@
         <result property="finishedAt" column="finished_at"/>
         <result property="commitSha" column="commit_sha"/>
         <result property="commitInfo" column="commit_info"/>
+        <result property="commitMrIid" column="commit_mr_iid"/>
     </resultMap>
 
     <select id="findByTaskId" resultMap="TaskModuleResult">
@@ -47,11 +48,11 @@
         INSERT INTO task_module (
             task_id, branch, module_name, module_path, status, port, pid, pgid,
             log_file, build_log_file, swagger_url, error_message, keep_alive_until,
-            created_at, started_at, finished_at, commit_sha, commit_info
+            created_at, started_at, finished_at, commit_sha, commit_info, commit_mr_iid
         ) VALUES (
             #{taskId}, #{branch}, #{moduleName}, #{modulePath}, #{status}, #{port}, #{pid}, #{pgid},
             #{logFile}, #{buildLogFile}, #{swaggerUrl}, #{errorMessage}, #{keepAliveUntil},
-            #{createdAt}, #{startedAt}, #{finishedAt}, #{commitSha}, #{commitInfo}
+            #{createdAt}, #{startedAt}, #{finishedAt}, #{commitSha}, #{commitInfo}, #{commitMrIid}
         )
     </insert>
 
@@ -69,7 +70,8 @@
             started_at = #{startedAt},
             finished_at = #{finishedAt},
             commit_sha = #{commitSha},
-            commit_info = #{commitInfo}
+            commit_info = #{commitInfo},
+            commit_mr_iid = #{commitMrIid}
         WHERE id = #{id}
     </update>
 
