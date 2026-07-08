@@ -292,6 +292,14 @@ public class BuildLaunchService {
             cmd.add("setsid");
         }
         cmd.add("java");
+        // 先塞全局默认 JVM 参数（-Xmx / -Xms / -XX 兜底），再塞用户 repo 级参数。
+        // HotSpot 处理重复 -Xmx / -Xms 时"后写覆盖前写"，用户配了自己的就会盖住默认，不用担心冲突。
+        String defaultJvmArgs = appProperties.getTask().getDefaultJvmArgs();
+        if (StringUtils.isNotBlank(defaultJvmArgs)) {
+            for (String a : defaultJvmArgs.split("\\s+")) {
+                if (!a.isEmpty()) cmd.add(a);
+            }
+        }
         String jvmArgs = repo.getJvmArgs();
         if (StringUtils.isNotBlank(jvmArgs)) {
             for (String a : jvmArgs.split("\\s+")) {

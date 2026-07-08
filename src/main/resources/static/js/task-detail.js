@@ -6,6 +6,18 @@ function commitSubject(info) {
   return parts[1] || '';
 }
 
+/** Swagger 单元格：只有 SUCCESS/RUNNING 才给活链接。
+ * STOPPED/FAILED 时端口大概率已被后来者复用，点开会打开另一个模块，非常误导，所以显示灰色不可点。
+ */
+function swaggerCell(m) {
+  if (!m.swaggerUrl) return '';
+  const url = escapeHtml(m.swaggerUrl);
+  if (m.status === 'SUCCESS' || m.status === 'RUNNING') {
+    return `<a href="${url}" target="_blank" class="text-decoration-none"><i class="ti ti-external-link me-1"></i>打开</a>`;
+  }
+  return `<span class="text-secondary" style="opacity:.55;cursor:not-allowed" title="模块已停止，端口可能被后启动的模块复用，链接不再可靠"><i class="ti ti-external-link me-1"></i>打开</span>`;
+}
+
 (async function () {
   const taskId = document.getElementById('task-id').textContent;
   const summary = document.getElementById('task-summary');
@@ -106,7 +118,7 @@ function commitSubject(info) {
         <td>${m.port || ''}</td>
         <td><small class="text-secondary">${m.pid || ''}</small></td>
         <td><small class="text-secondary">${escapeHtml(fmtDate(m.keepAliveUntil))}</small></td>
-        <td>${m.swaggerUrl ? `<a href="${escapeHtml(m.swaggerUrl)}" target="_blank" class="text-decoration-none"><i class="ti ti-external-link me-1"></i>打开</a>` : ''}</td>
+        <td>${swaggerCell(m)}</td>
         <td><small class="text-danger">${escapeHtml(m.errorMessage || '')}</small></td>
         <td class="text-end">
           <div class="btn-list justify-content-end">
@@ -115,6 +127,8 @@ function commitSubject(info) {
                     data-branch="${escapeHtml(m.branch || '')}"
                     data-status="${escapeHtml(m.status || '')}"><i class="ti ti-file-text me-1"></i>日志</button>
             ${m.status === 'SUCCESS' || m.status === 'RUNNING' ? `<button class="btn btn-sm btn-outline-danger" data-act="stop" data-id="${m.id}"><i class="ti ti-player-stop me-1"></i>停止</button>` : ''}
+            ${m.status === 'FAILED' ? `<button class="btn btn-sm btn-outline-primary" data-act="retry" data-id="${m.id}"
+                    data-name="${escapeHtml(m.moduleName || '')}"><i class="ti ti-refresh me-1"></i>重试</button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -194,6 +208,21 @@ function commitSubject(info) {
       await api.post('/api/tasks/modules/' + id + '/stop');
       await load();
       UI.success('已停止');
+    } else if (btn.dataset.act === 'retry') {
+      const name = btn.dataset.name || '';
+      const ok = await UI.confirm({
+        title: '重试启动该模块？',
+        text: '将复用已编译的 jar 直接重起进程（不重新拉代码、不重新 build）。' + (name ? '\n模块：' + name : '')
+      });
+      if (!ok) return;
+      try {
+        await api.post('/api/tasks/modules/' + id + '/retry');
+        UI.success('已提交，稍等状态刷新');
+        startOuterPoll();
+        await load();
+      } catch (e) {
+        UI.danger(e.message || '重试失败');
+      }
     } else if (btn.dataset.act === 'log') {
       stopLogAutoRefresh();
       logContent.textContent = '加载中...';

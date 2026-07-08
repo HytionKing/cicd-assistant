@@ -21,8 +21,13 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.stream.Collectors;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -215,6 +220,9 @@ public class TaskService {
                     continue;
                 }
 
+                // 先把所有模块行落成 STARTING 状态，再用线程池并发 launchOne
+                // build 阶段串行(同一分支同一 workspace)，只把最后一步 java -jar 起进程并发化
+                List<TaskModule> tms = new ArrayList<>();
                 for (ModuleScanner.Module mod : modules) {
                     totalCount++;
                     TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
@@ -224,51 +232,46 @@ public class TaskService {
                     tm.setCommitInfo(commitInfo);
                     tm.setCommitMrIid(commitMrIid);
                     taskModuleMapper.update(tm);
+                    tms.add(tm);
+                }
 
-                    Integer port = portPool.acquire();
-                    if (port == null) {
-                        tm.setStatus("FAILED");
-                        tm.setErrorMessage("no free port in pool");
-                        tm.setFinishedAt(now());
-                        taskModuleMapper.update(tm);
-                        errors.append("[").append(branch).append("/").append(mod.getName()).append("] no port; ");
-                        continue;
+                int concurrency = Math.max(1,
+                        Math.min(appProperties.getTask().getLaunchConcurrency(), modules.size()));
+                log.info("[TASK#{}] branch={} launching {} modules concurrency={}",
+                        taskId, branch, modules.size(), concurrency);
+                final Repo repoFinal = repo;
+                final File repoRootFinal = repoRoot;
+                ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
+                    Thread t = new Thread(r);
+                    t.setName("cs-launch-" + taskId + "-" + t.getId());
+                    t.setDaemon(true);
+                    return t;
+                });
+                try {
+                    List<Callable<String>> jobs = new ArrayList<>();
+                    for (int i = 0; i < modules.size(); i++) {
+                        final ModuleScanner.Module mod = modules.get(i);
+                        final TaskModule tm = tms.get(i);
+                        jobs.add(() -> launchOne(taskId, repoFinal, repoRootFinal, mod, tm));
                     }
-                    tm.setPort(port);
-
-                    Path runLogPath = buildLaunchService.workspaceLogPath(taskId, branch, mod.getName());
-                    Files.createDirectories(runLogPath.getParent());
-                    tm.setLogFile(runLogPath.toString());
-                    taskModuleMapper.update(tm);
-
-                    try {
-                        BuildLaunchService.LaunchResult lr = buildLaunchService.launchModule(repo, repoRoot, mod, port, runLogPath.toFile());
-                        tm.setPid(lr.getPid());
-                        tm.setPgid(lr.getPgid());
-                        tm.setPort(lr.getPort());
-                        tm.setSwaggerUrl(lr.getSwaggerUrl());
-                        if (lr.isSuccess()) {
-                            tm.setStatus("SUCCESS");
-                            tm.setKeepAliveUntil(LocalDateTime.now()
-                                    .plusMinutes(appProperties.getWorkspace().getKeepAliveMinutes())
-                                    .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                    List<Future<String>> futures = pool.invokeAll(jobs);
+                    for (int i = 0; i < futures.size(); i++) {
+                        String err;
+                        try {
+                            err = futures.get(i).get();
+                        } catch (Exception e) {
+                            err = e.getMessage();
+                        }
+                        if (err == null) {
                             successCount++;
                         } else {
-                            tm.setStatus("FAILED");
-                            tm.setErrorMessage(lr.getErrorMessage());
-                            ProcessManager.killTree(lr.getProcess(), lr.getPid(), lr.getPgid());
-                            portPool.release(port);
-                            errors.append("[").append(branch).append("/").append(mod.getName()).append("] ").append(lr.getErrorMessage()).append("; ");
+                            errors.append("[").append(branch).append("/")
+                                    .append(modules.get(i).getName()).append("] ")
+                                    .append(err).append("; ");
                         }
-                    } catch (Exception e) {
-                        log.error("launch failed", e);
-                        tm.setStatus("FAILED");
-                        tm.setErrorMessage("exception: " + e.getMessage());
-                        portPool.release(port);
-                        errors.append("[").append(branch).append("/").append(mod.getName()).append("] ").append(e.getMessage()).append("; ");
                     }
-                    tm.setFinishedAt(now());
-                    taskModuleMapper.update(tm);
+                } finally {
+                    pool.shutdown();
                 }
             } catch (Exception e) {
                 log.error("[TASK#{}] branch processing failed: {}", taskId, branch, e);
@@ -301,6 +304,114 @@ public class TaskService {
         task.setFinishedAt(now());
         taskMapper.update(task);
         log.info("[TASK#{}] DONE status={} success={}/{}", taskId, finalStatus, successCount, totalCount);
+    }
+
+    /**
+     * 启动单个模块：申请端口 → 拉真实 launchModule → 回写 SUCCESS/FAILED 状态。
+     * 调用前 tm 应已经落成 STARTING 状态（含 commit info 等元信息）。
+     * 返回 null 表示成功；返回非 null 是错误摘要，供上层拼进 errors。
+     * 线程安全：portPool 是 synchronized 的，taskModuleMapper 通过 Hikari 连接池并发无问题。
+     */
+    private String launchOne(Long taskId, Repo repo, File repoRoot, ModuleScanner.Module mod, TaskModule tm) {
+        Integer port = portPool.acquire();
+        if (port == null) {
+            tm.setStatus("FAILED");
+            tm.setErrorMessage("no free port in pool");
+            tm.setFinishedAt(now());
+            taskModuleMapper.update(tm);
+            return "no port";
+        }
+        tm.setPort(port);
+        try {
+            Path runLogPath = buildLaunchService.workspaceLogPath(taskId, tm.getBranch(), mod.getName());
+            Files.createDirectories(runLogPath.getParent());
+            tm.setLogFile(runLogPath.toString());
+            taskModuleMapper.update(tm);
+
+            BuildLaunchService.LaunchResult lr =
+                    buildLaunchService.launchModule(repo, repoRoot, mod, port, runLogPath.toFile());
+            tm.setPid(lr.getPid());
+            tm.setPgid(lr.getPgid());
+            tm.setPort(lr.getPort());
+            tm.setSwaggerUrl(lr.getSwaggerUrl());
+            if (lr.isSuccess()) {
+                tm.setStatus("SUCCESS");
+                tm.setKeepAliveUntil(LocalDateTime.now()
+                        .plusMinutes(appProperties.getWorkspace().getKeepAliveMinutes())
+                        .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                tm.setFinishedAt(now());
+                taskModuleMapper.update(tm);
+                return null;
+            } else {
+                tm.setStatus("FAILED");
+                tm.setErrorMessage(lr.getErrorMessage());
+                tm.setFinishedAt(now());
+                taskModuleMapper.update(tm);
+                ProcessManager.killTree(lr.getProcess(), lr.getPid(), lr.getPgid());
+                portPool.release(port);
+                return lr.getErrorMessage();
+            }
+        } catch (Exception e) {
+            log.error("launch failed", e);
+            tm.setStatus("FAILED");
+            tm.setErrorMessage("exception: " + e.getMessage());
+            tm.setFinishedAt(now());
+            taskModuleMapper.update(tm);
+            portPool.release(port);
+            return e.getMessage();
+        }
+    }
+
+    /**
+     * 手动重试一个 FAILED 模块。不重新 clone/build，只重新启动进程。
+     * jar 还在原 workspace 里就直接复用；工作目录被清就明确报错让用户重新提交任务。
+     * 场景：多模块并发启动时其中一个因 OOM 挂掉，等前面吃满内存的模块保活到期后点重试大概率能起。
+     */
+    @Async("taskExecutor")
+    public void retryModuleAsync(Long moduleId) {
+        TaskModule tm = taskModuleMapper.findById(moduleId);
+        if (tm == null) {
+            log.warn("[RETRY] module={} not found", moduleId);
+            return;
+        }
+        if (!"FAILED".equals(tm.getStatus())) {
+            log.warn("[RETRY] module={} status={} not FAILED, skip", moduleId, tm.getStatus());
+            return;
+        }
+        Task task = taskMapper.findById(tm.getTaskId());
+        if (task == null) return;
+        Repo repo = repoService.findByIdDecrypted(task.getRepoId());
+        if (repo == null) {
+            tm.setErrorMessage("repo not found for retry (id=" + task.getRepoId() + ")");
+            taskModuleMapper.update(tm);
+            return;
+        }
+        String wsRoot = appProperties.getWorkspace().getRoot();
+        String safeBranch = tm.getBranch().replace('/', '_');
+        File repoRoot = new File(wsRoot, repo.getName() + "/" + safeBranch);
+        if (!new File(repoRoot, ".git").exists()) {
+            tm.setErrorMessage("工作目录已清理，请重新提交任务");
+            taskModuleMapper.update(tm);
+            log.warn("[RETRY] module={} workspace missing at {}", moduleId, repoRoot.getAbsolutePath());
+            return;
+        }
+        // 复位状态，进入新一轮 STARTING
+        tm.setStatus("STARTING");
+        tm.setStartedAt(now());
+        tm.setFinishedAt(null);
+        tm.setErrorMessage(null);
+        tm.setPort(null);
+        tm.setPid(null);
+        tm.setPgid(null);
+        tm.setKeepAliveUntil(null);
+        tm.setSwaggerUrl(null);
+        taskModuleMapper.update(tm);
+
+        ModuleScanner.Module mod = new ModuleScanner.Module(tm.getModuleName(), tm.getModulePath());
+        log.info("[RETRY] module={} branch={} name={} path={}",
+                moduleId, tm.getBranch(), tm.getModuleName(), tm.getModulePath());
+        String err = launchOne(tm.getTaskId(), repo, repoRoot, mod, tm);
+        log.info("[RETRY] module={} done result={}", moduleId, err == null ? "OK" : err);
     }
 
     private TaskModule newModuleRow(Long taskId, String branch, ModuleScanner.Module mod, String buildLog) {
