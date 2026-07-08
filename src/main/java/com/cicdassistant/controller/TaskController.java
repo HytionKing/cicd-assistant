@@ -56,6 +56,30 @@ public class TaskController {
         return ResponseEntity.noContent().build();
     }
 
+    // 重试失败的模块：guard 由 service 内部做，不重新 clone/build 只重起进程。
+    // 立即返回 202，浏览器靠 4 秒轮询看到 STARTING → SUCCESS/FAILED。
+    @PostMapping("/modules/{moduleId}/retry")
+    public ResponseEntity<Map<String, Object>> retryModule(@PathVariable Long moduleId) {
+        TaskModule m = taskService.getModule(moduleId);
+        if (m == null) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("error", "not_found");
+            body.put("message", "模块不存在");
+            return ResponseEntity.status(404).body(body);
+        }
+        if (!"FAILED".equals(m.getStatus())) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("error", "invalid_state");
+            body.put("message", "只有 FAILED 状态可重试，当前=" + m.getStatus());
+            return ResponseEntity.badRequest().body(body);
+        }
+        taskService.retryModuleAsync(moduleId);
+        // 前端 api.post 对 202 会尝试 r.json()，返回一个占位 body 免得解析报错
+        Map<String, Object> ok = new HashMap<>();
+        ok.put("ok", true);
+        return ResponseEntity.accepted().body(ok);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         taskService.deleteTask(id);

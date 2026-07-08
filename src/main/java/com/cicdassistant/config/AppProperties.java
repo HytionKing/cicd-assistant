@@ -78,7 +78,12 @@ public class AppProperties {
     @Data
     public static class Workspace {
         private String root = "./workspace";
-        private int keepAliveMinutes = 5;
+        /**
+         * 启动成功的模块自动 STOP 前的保活时间。默认 3 分钟。
+         * 时间到 KeepAliveSweeper 会 killTree + release port，端口被后来者复用。
+         * 宿主内存吃紧时可以调更短（1~2 分钟）；如果用户操作节奏慢想多留一会儿可以拉长。
+         */
+        private int keepAliveMinutes = 3;
         private int logRetentionDays = 7;
     }
 
@@ -100,6 +105,18 @@ public class AppProperties {
         private int maxConcurrent = 2;
         private int startupTimeoutSeconds = 300;
         private int buildTimeoutSeconds = 1800;
+        /**
+         * 同一任务内同一分支的模块并发启动数。默认 3。
+         * 各模块的 mvn build 仍串行（同一分支同一 workspace），只把最后一步 java -jar 起进程并发化。
+         * 宿主机弱可以降到 1（退化到串行）；机器猛可以拉到 5~8，注意 -Xmx 也要跟上。
+         */
+        private int launchConcurrency = 3;
+        /**
+         * 启动子进程默认追加的 JVM 参数，放在用户 {@code repo.jvmArgs} 前面。
+         * -Xmx / -Xms 这类"后写的覆盖前写的"，用户配了自己的会盖住默认。
+         * -XX:+ExitOnOutOfMemoryError 让 OOM 时子进程直接退出而不是残喘半死，方便点重试。
+         */
+        private String defaultJvmArgs = "-Xmx512m -Xms128m -XX:+ExitOnOutOfMemoryError";
     }
 
     @Data
