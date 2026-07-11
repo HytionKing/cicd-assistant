@@ -45,7 +45,7 @@ public class TaskController {
 
     @PostMapping
     public Task create(@RequestBody CreateTaskRequest req) {
-        Task t = taskService.createTask(req.getRepoId(), req.getBranches(), req.getModules());
+        Task t = taskService.createTask(req.getRepoId(), req.getBranches(), req.getModules(), req.getKeepAlive());
         taskService.runTaskAsync(t.getId());
         return t;
     }
@@ -113,11 +113,15 @@ public class TaskController {
         private Long repoId;
         private List<String> branches;
         private String modules;
+        /** null 视作 true（老客户端默认保活行为不变）；false 才走"启动通过立即 stop" */
+        private Boolean keepAlive;
         public Long getRepoId() { return repoId; }
         public void setRepoId(Long repoId) { this.repoId = repoId; }
         public List<String> getBranches() { return branches; }
         public void setBranches(List<String> branches) { this.branches = branches; }
         public String getModules() { return modules; }
         public void setModules(String modules) { this.modules = modules; }
+        public Boolean getKeepAlive() { return keepAlive; }
+        public void setKeepAlive(Boolean keepAlive) { this.keepAlive = keepAlive; }
     }
 }

@@ -64,8 +64,10 @@ app:
   workspace:
     # 克隆代码的根目录，按 repo/branch 分子目录
     root: ./workspace
-    # 启动成功的模块自动 STOP 前的保活时间；宿主内存吃紧就调小
-    keep-alive-minutes: 3
+    # 启动成功后模块被自动 STOP 前的保活时间（秒级）；宿主内存吃紧就调小；创建任务时也能整体关掉保活
+    keep-alive-seconds: 180
+    # KeepAliveSweeper 检查间隔（秒）；太长会让保活到期后残留端口
+    keep-alive-check-interval-seconds: 5
     log-retention-days: 7
   maven:
     home: ""
@@ -83,6 +85,8 @@ app:
     build-timeout-seconds: 1800
     # 同一分支下多模块的并发启动数（build 仍串行），机器弱可降到 1
     launch-concurrency: 3
+    # 跨分支的并发数（clone+build+launch 整个流程并行）。默认 2，mvn build 吃内存要留余量
+    branch-concurrency: 2
     # 追加给子进程的默认 JVM 参数，放在 repo.jvmArgs 前面。留空表示不加默认参数（继承 java 命令行默认）。
     # -Xmx 限制堆上限避免多模块并存把宿主内存打爆；-XX:+ExitOnOutOfMemoryError 让 OOM 时子进程直接退出，方便点"重试"
     default-jvm-args: "-Xmx512m -Xms128m -XX:+ExitOnOutOfMemoryError"

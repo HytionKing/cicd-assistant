@@ -9,8 +9,17 @@
   sel.innerHTML = repos.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')
     || '<option value="">(没有仓库，先去仓库管理添加)</option>';
 
-  function checkRow(value) {
-    return `<label class="form-check"><input type="checkbox" class="form-check-input" value="${escapeHtml(value)}"/><span class="form-check-label">${escapeHtml(value)}</span></label>`;
+  function checkRow(value, opts) {
+    // opts.checked：默认勾上；opts.manual：手动加的分支加个 badge 让用户一眼看到区别
+    const checked = opts && opts.checked ? ' checked' : '';
+    const manual = opts && opts.manual
+      ? ' <span class="badge bg-blue-lt ms-1" style="font-size:.68rem">手动</span>' : '';
+    return `<label class="form-check"><input type="checkbox" class="form-check-input" value="${escapeHtml(value)}"${checked}/><span class="form-check-label">${escapeHtml(value)}${manual}</span></label>`;
+  }
+
+  // 已存在的分支不再重复加（大小写敏感精确匹配即可，git branch 本身区分大小写）
+  function branchExists(name) {
+    return !!branchesBox.querySelector(`input[type=checkbox][value="${CSS.escape(name)}"]`);
   }
 
   async function loadModules() {
@@ -56,6 +65,41 @@
     }
   };
 
+  // 手动添加分支：把远端拉不到的分支（临时/hotfix/尚未推的本地分支）直接键入加进列表
+  const manualInput = document.getElementById('txt-manual-branch');
+  function addManualBranches() {
+    const raw = (manualInput.value || '').trim();
+    if (!raw) return;
+    const names = raw.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+    const added = [];
+    const skipped = [];
+    for (const n of names) {
+      if (branchExists(n)) { skipped.push(n); continue; }
+      // 首次添加时 branchesBox 里可能还是"点击拉取分支加载"提示，需要先清掉
+      if (branchesBox.querySelector('span.text-secondary')) branchesBox.innerHTML = '';
+      branchesBox.insertAdjacentHTML('beforeend', checkRow(n, { checked: true, manual: true }));
+      added.push(n);
+    }
+    manualInput.value = '';
+    if (added.length) msg.textContent = '已添加 ' + added.length + ' 个手动分支';
+    if (skipped.length) UI.warning('这些分支已在列表：' + skipped.join(', '));
+  }
+  document.getElementById('btn-add-manual').onclick = addManualBranches;
+  manualInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); addManualBranches(); }
+  });
+
+  // 保活开关：关掉的提示文字改一下让用户知道后果
+  const chkKeepAlive = document.getElementById('chk-keep-alive');
+  const keepAliveHint = document.getElementById('keep-alive-hint');
+  chkKeepAlive.addEventListener('change', () => {
+    keepAliveHint.textContent = chkKeepAlive.checked
+      ? '保留进程供访问'
+      : '启动+swagger验证通过后立即停止（省内存）';
+    keepAliveHint.classList.toggle('text-warning', !chkKeepAlive.checked);
+    keepAliveHint.classList.toggle('text-secondary', chkKeepAlive.checked);
+  });
+
   document.getElementById('btn-all').onclick = (ev) => {
     ev.preventDefault();
     modulesBox.querySelectorAll('input[type=checkbox]').forEach(i => i.checked = true);
@@ -72,7 +116,12 @@
     if (branches.length === 0) { UI.warning('请选择至少一个分支'); return; }
     const modules = Array.from(modulesBox.querySelectorAll('input[type=checkbox]:checked')).map(i => i.value).join(',');
     try {
-      const t = await api.post('/api/tasks', { repoId: Number(id), branches, modules });
+      const t = await api.post('/api/tasks', {
+        repoId: Number(id),
+        branches,
+        modules,
+        keepAlive: chkKeepAlive.checked
+      });
       msg.textContent = '任务已创建 #' + t.id;
       setTimeout(() => { location.href = '/tasks/' + t.id; }, 500);
     } catch (e) {

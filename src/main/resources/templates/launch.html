@@ -39,6 +39,14 @@
                                 <div id="branches-box" class="select-list">
                                     <span class="text-secondary small">点击"拉取分支"加载</span>
                                 </div>
+                                <!-- 手动输入分支：远端拉不到的临时分支/hotfix 直接键入即可 -->
+                                <div class="input-group input-group-sm mt-2">
+                                    <input id="txt-manual-branch" type="text" class="form-control form-control-sm"
+                                           placeholder="手动输入分支名，多个用英文逗号分隔"/>
+                                    <button id="btn-add-manual" class="btn btn-outline-primary" type="button">
+                                        <i class="ti ti-plus"></i>添加
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="col-md-6">
@@ -56,10 +64,17 @@
                             </div>
                         </div>
 
-                        <div class="text-end mt-4">
-                            <button id="btn-start" class="btn btn-primary">
-                                <i class="ti ti-player-play me-1"></i>开始验证
-                            </button>
+                        <div class="d-flex align-items-center mt-4">
+                            <label class="form-check form-switch mb-0">
+                                <input id="chk-keep-alive" class="form-check-input" type="checkbox" checked/>
+                                <span class="form-check-label">启动后保活</span>
+                            </label>
+                            <span class="text-secondary small ms-2" id="keep-alive-hint">保留进程供访问</span>
+                            <div class="ms-auto">
+                                <button id="btn-start" class="btn btn-primary">
+                                    <i class="ti ti-player-play me-1"></i>开始验证
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

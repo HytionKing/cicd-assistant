@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS task (
     error_message TEXT,
     created_at TEXT,
     started_at TEXT,
-    finished_at TEXT
+    finished_at TEXT,
+    keep_alive INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS task_module (

@@ -14,4 +14,6 @@ public class Task {
     private String createdAt;
     private String startedAt;
     private String finishedAt;
+    /** 启动成功后是否保活。false → SUCCESS 立刻 stop 释放端口，用于快速走一遍启动+swagger 验证。 */
+    private Boolean keepAlive = Boolean.TRUE;
 }
