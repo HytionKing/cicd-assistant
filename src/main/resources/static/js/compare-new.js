@@ -48,7 +48,7 @@
   }
 
   async function loadWebhooks() {
-    const list = await api.get('/api/compare/webhooks');
+    const list = await api.get('/api/notifications');
     const enabled = list.filter(w => w.enabled === 1);
     selWebhook.innerHTML = '<option value="">不推送</option>' +
       enabled.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join('');

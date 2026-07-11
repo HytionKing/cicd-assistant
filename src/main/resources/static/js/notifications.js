@@ -6,7 +6,7 @@
   const title = document.getElementById('wh-modal-title');
 
   async function load() {
-    const list = await api.get('/api/compare/webhooks');
+    const list = await api.get('/api/notifications');
     tbody.innerHTML = list.map(w => `
       <tr>
         <td>#${w.id}</td>
@@ -55,8 +55,8 @@
     };
     const id = form.elements.id.value;
     try {
-      if (id) await api.put('/api/compare/webhooks/' + id, data);
-      else await api.post('/api/compare/webhooks', data);
+      if (id) await api.put('/api/notifications/' + id, data);
+      else await api.post('/api/notifications', data);
       modal.hide();
       await load();
       UI.success(id ? '已更新' : '已新建');
@@ -69,12 +69,12 @@
     const id = btn.dataset.id;
     const act = btn.dataset.act;
     if (act === 'edit') {
-      const w = await api.get('/api/compare/webhooks/' + id);
+      const w = await api.get('/api/notifications/' + id);
       openModal(w);
     } else if (act === 'del') {
       const ok = await UI.confirm({ title: '确认删除该 Webhook？' });
       if (!ok) return;
-      await api.del('/api/compare/webhooks/' + id);
+      await api.del('/api/notifications/' + id);
       await load();
       UI.success('已删除');
     } else if (act === 'test') {
@@ -82,7 +82,7 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>发送中';
       try {
-        const r = await api.post('/api/compare/webhooks/' + id + '/test');
+        const r = await api.post('/api/notifications/' + id + '/test');
         if (r.success) UI.success('发送成功：' + r.message, { duration: 6000 });
         else UI.danger('发送失败：' + r.message, { duration: 8000 });
       } catch (e) {

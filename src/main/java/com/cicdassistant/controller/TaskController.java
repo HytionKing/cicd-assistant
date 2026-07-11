@@ -45,7 +45,8 @@ public class TaskController {
 
     @PostMapping
     public Task create(@RequestBody CreateTaskRequest req) {
-        Task t = taskService.createTask(req.getRepoId(), req.getBranches(), req.getModules(), req.getKeepAlive());
+        Task t = taskService.createTask(req.getRepoId(), req.getBranches(), req.getModules(),
+                req.getKeepAlive(), req.getNotifyWebhookId());
         taskService.runTaskAsync(t.getId());
         return t;
     }
@@ -115,6 +116,8 @@ public class TaskController {
         private String modules;
         /** null 视作 true（老客户端默认保活行为不变）；false 才走"启动通过立即 stop" */
         private Boolean keepAlive;
+        /** 任务终态时把汇总结果推的 webhook id；null 不推 */
+        private Long notifyWebhookId;
         public Long getRepoId() { return repoId; }
         public void setRepoId(Long repoId) { this.repoId = repoId; }
         public List<String> getBranches() { return branches; }
@@ -123,5 +126,7 @@ public class TaskController {
         public void setModules(String modules) { this.modules = modules; }
         public Boolean getKeepAlive() { return keepAlive; }
         public void setKeepAlive(Boolean keepAlive) { this.keepAlive = keepAlive; }
+        public Long getNotifyWebhookId() { return notifyWebhookId; }
+        public void setNotifyWebhookId(Long notifyWebhookId) { this.notifyWebhookId = notifyWebhookId; }
     }
 }

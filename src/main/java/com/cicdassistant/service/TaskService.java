@@ -1,6 +1,7 @@
 package com.cicdassistant.service;
 
 import com.cicdassistant.config.AppProperties;
+import com.cicdassistant.entity.NotificationWebhook;
 import com.cicdassistant.entity.Repo;
 import com.cicdassistant.entity.Task;
 import com.cicdassistant.entity.TaskModule;
@@ -39,19 +40,26 @@ public class TaskService {
     private final BuildLaunchService buildLaunchService;
     private final PortPool portPool;
     private final AppProperties appProperties;
+    private final NotificationWebhookService notificationService;
+    private final LaunchNotifier launchNotifier;
 
     public TaskService(TaskMapper taskMapper, TaskModuleMapper taskModuleMapper,
                        RepoService repoService, BuildLaunchService buildLaunchService,
-                       PortPool portPool, AppProperties appProperties) {
+                       PortPool portPool, AppProperties appProperties,
+                       NotificationWebhookService notificationService,
+                       LaunchNotifier launchNotifier) {
         this.taskMapper = taskMapper;
         this.taskModuleMapper = taskModuleMapper;
         this.repoService = repoService;
         this.buildLaunchService = buildLaunchService;
         this.portPool = portPool;
         this.appProperties = appProperties;
+        this.notificationService = notificationService;
+        this.launchNotifier = launchNotifier;
     }
 
-    public Task createTask(Long repoId, List<String> branches, String modules, Boolean keepAlive) {
+    public Task createTask(Long repoId, List<String> branches, String modules, Boolean keepAlive,
+                           Long notifyWebhookId) {
         Repo repo = repoService.findByIdMasked(repoId);
         if (repo == null) throw new IllegalArgumentException("repo not found: " + repoId);
         Task t = new Task();
@@ -61,6 +69,7 @@ public class TaskService {
         t.setModules(modules);
         t.setStatus("PENDING");
         t.setKeepAlive(keepAlive == null ? Boolean.TRUE : keepAlive);
+        t.setNotifyWebhookId(notifyWebhookId);
         t.setCreatedAt(now());
         taskMapper.insert(t);
         // 提前为每个分支插一行占位，避免详情页空白等到 mvn 编译完
@@ -198,6 +207,21 @@ public class TaskService {
         task.setFinishedAt(now());
         taskMapper.update(task);
         log.info("[TASK#{}] DONE status={} success={}/{}", taskId, finalStatus, successCount, totalCount);
+
+        // 任务终态推钉钉：hook 为空/禁用/查不到都静默跳过，不因通知失败影响任务本身状态
+        if (task.getNotifyWebhookId() != null) {
+            try {
+                NotificationWebhook hook = notificationService.get(task.getNotifyWebhookId());
+                if (hook != null) {
+                    List<TaskModule> modulesForNotify = taskModuleMapper.findByTaskId(taskId);
+                    launchNotifier.notifyTaskDone(task, modulesForNotify, hook);
+                } else {
+                    log.warn("[TASK#{}] notify webhook id={} not found, skip", taskId, task.getNotifyWebhookId());
+                }
+            } catch (Exception e) {
+                log.warn("[TASK#{}] notify failed: {}", taskId, e.getMessage());
+            }
+        }
     }
 
     /** 分支一次跑完的统计。errors 是拼好的 "[branch/module] xxx; " 段，直接 append 到任务级 StringBuilder。 */

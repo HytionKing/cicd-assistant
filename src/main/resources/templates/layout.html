@@ -51,13 +51,6 @@
                                     <span class="nav-link-title">知识库</span>
                                 </a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" th:href="@{/compare/webhooks}"
-                                   th:classappend="${page == 'compare.webhooks'} ? 'active' : ''">
-                                    <span class="nav-link-icon"><i class="ti ti-bell"></i></span>
-                                    <span class="nav-link-title">通知配置</span>
-                                </a>
-                            </li>
                         </ul>
                     </div>
                 </li>
@@ -93,6 +86,14 @@
                     </div>
                 </li>
                 </th:block>
+
+                <!-- 通知配置：一级菜单，代码启动 / 合并检测都能在提交任务时选它做推送目标 -->
+                <li class="nav-item" th:classappend="${page == 'notifications'} ? 'active' : ''">
+                    <a class="nav-link" th:href="@{/notifications}">
+                        <span class="nav-link-icon"><i class="ti ti-bell"></i></span>
+                        <span class="nav-link-title">通知配置</span>
+                    </a>
+                </li>
             </ul>
             <div class="mt-auto sidebar-footer"
                  th:with="feedbackUrl=${@environment.getProperty('app.feedback-url')}">

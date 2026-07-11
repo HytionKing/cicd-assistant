@@ -10,12 +10,12 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/compare/webhooks")
-public class NotificationWebhookController {
+@RequestMapping("/api/notifications")
+public class NotificationController {
 
     private final NotificationWebhookService service;
 
-    public NotificationWebhookController(NotificationWebhookService service) {
+    public NotificationController(NotificationWebhookService service) {
         this.service = service;
     }
 
