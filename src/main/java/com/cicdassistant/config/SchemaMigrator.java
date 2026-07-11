@@ -33,6 +33,8 @@ public class SchemaMigrator implements ApplicationRunner {
         ensureColumn("task_module", "commit_info", "TEXT");
         // GitLab merge commit body 里能挖出的 MR iid（!123），用户希望在分支列一起展示
         ensureColumn("task_module", "commit_mr_iid", "TEXT");
+        // 用户可在创建任务时关掉保活：启动验证过就立刻 stop，避免多模块并存把内存压爆
+        ensureColumn("task", "keep_alive", "INTEGER NOT NULL DEFAULT 1");
     }
 
     private void ensureColumn(String table, String column, String type) {

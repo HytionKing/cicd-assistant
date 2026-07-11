@@ -79,11 +79,14 @@ public class AppProperties {
     public static class Workspace {
         private String root = "./workspace";
         /**
-         * 启动成功的模块自动 STOP 前的保活时间。默认 3 分钟。
+         * 启动成功后模块被自动 STOP 前的保活时间（秒级）。默认 180s。
          * 时间到 KeepAliveSweeper 会 killTree + release port，端口被后来者复用。
-         * 宿主内存吃紧时可以调更短（1~2 分钟）；如果用户操作节奏慢想多留一会儿可以拉长。
+         * 宿主内存吃紧就调更短（30~60s），操作节奏慢想多留一会儿就拉长。
+         * 前端提交任务时也能整体关掉保活（keepAlive=false），启动验证过就立刻 stop。
          */
-        private int keepAliveMinutes = 3;
+        private int keepAliveSeconds = 180;
+        /** KeepAliveSweeper 检查间隔（秒），太长会让保活到期后残留端口。默认 5s。 */
+        private int keepAliveCheckIntervalSeconds = 5;
         private int logRetentionDays = 7;
     }
 
@@ -111,6 +114,12 @@ public class AppProperties {
          * 宿主机弱可以降到 1（退化到串行）；机器猛可以拉到 5~8，注意 -Xmx 也要跟上。
          */
         private int launchConcurrency = 3;
+        /**
+         * 同一任务内跨分支的并发数。默认 2，因为 mvn build 吃内存，比 launch 保守点。
+         * 每分支独立 workspace 目录 + 独立进程，互不干扰；本地 ~/.m2 并发解压依赖有少量竞争但可接受。
+         * 单分支多模块场景没意义（外层就一条 branch），效果体现在多分支任务上。
+         */
+        private int branchConcurrency = 2;
         /**
          * 启动子进程默认追加的 JVM 参数，放在用户 {@code repo.jvmArgs} 前面。
          * -Xmx / -Xms 这类"后写的覆盖前写的"，用户配了自己的会盖住默认。

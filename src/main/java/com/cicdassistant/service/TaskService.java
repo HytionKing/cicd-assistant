@@ -51,7 +51,7 @@ public class TaskService {
         this.appProperties = appProperties;
     }
 
-    public Task createTask(Long repoId, List<String> branches, String modules) {
+    public Task createTask(Long repoId, List<String> branches, String modules, Boolean keepAlive) {
         Repo repo = repoService.findByIdMasked(repoId);
         if (repo == null) throw new IllegalArgumentException("repo not found: " + repoId);
         Task t = new Task();
@@ -60,6 +60,7 @@ public class TaskService {
         t.setBranches(String.join(",", branches));
         t.setModules(modules);
         t.setStatus("PENDING");
+        t.setKeepAlive(keepAlive == null ? Boolean.TRUE : keepAlive);
         t.setCreatedAt(now());
         taskMapper.insert(t);
         // 提前为每个分支插一行占位，避免详情页空白等到 mvn 编译完
@@ -137,156 +138,49 @@ public class TaskService {
         taskMapper.update(task);
 
         Repo repo = repoService.findByIdDecrypted(task.getRepoId());
-        String[] branches = task.getBranches().split(",");
+        List<String> branches = new ArrayList<>();
+        for (String raw : task.getBranches().split(",")) {
+            String b = raw.trim();
+            if (!b.isEmpty()) branches.add(b);
+        }
+
+        // 跨分支并发：每个 branch 一个 Callable，跑完汇总 successCount / totalCount / errors。
+        // build 吃内存，branchConcurrency 默认 2 比 launchConcurrency 保守。
+        int branchConcurrency = Math.max(1,
+                Math.min(appProperties.getTask().getBranchConcurrency(), branches.size()));
+        log.info("[TASK#{}] processing {} branches concurrency={}", taskId, branches.size(), branchConcurrency);
         int successCount = 0;
         int totalCount = 0;
         StringBuilder errors = new StringBuilder();
 
-        for (String branch : branches) {
-            branch = branch.trim();
-            if (branch.isEmpty()) continue;
-            log.info("[TASK#{}] >>> branch={} begin", taskId, branch);
-            TaskModule placeholder = taskModuleMapper.findPlaceholder(taskId, branch);
-            try {
-                if (placeholder != null) {
-                    placeholder.setStatus("CLONING");
-                    placeholder.setStartedAt(now());
-                    taskModuleMapper.update(placeholder);
-                }
-                File repoRoot = buildLaunchService.ensureRepoClone(repo, branch);
-                // 拉完就抓 HEAD commit 信息（sha + subject + author + 相对时间），后面所有模块行都盖同一份
-                String[] head = buildLaunchService.readHeadInfo(repoRoot);
-                String commitSha = head[0];
-                String commitInfo = head[1];
-                String commitMrIid = head.length > 2 ? head[2] : null;
-                if (commitInfo != null) {
-                    log.info("[TASK#{}] branch={} HEAD -> {}{}", taskId, branch, commitInfo,
-                            commitMrIid != null ? " (!" + commitMrIid + ")" : "");
-                }
-                if (placeholder != null) {
-                    placeholder.setStatus("SCANNING");
-                    placeholder.setCommitSha(commitSha);
-                    placeholder.setCommitInfo(commitInfo);
-                    placeholder.setCommitMrIid(commitMrIid);
-                    taskModuleMapper.update(placeholder);
-                }
-                List<ModuleScanner.Module> modules = buildLaunchService.scanModules(repoRoot, task.getModules());
-                log.info("[TASK#{}] branch={} scanned modules: {}", taskId, branch,
-                        modules.stream().map(m -> m.getName() + "(" + m.getRelativePath() + ")").collect(Collectors.toList()));
-                if (modules.isEmpty()) {
-                    log.warn("[TASK#{}] no springboot module found in branch={}", taskId, branch);
-                    if (placeholder != null) {
-                        placeholder.setStatus("FAILED");
-                        placeholder.setErrorMessage("no SpringBoot module found");
-                        placeholder.setFinishedAt(now());
-                        taskModuleMapper.update(placeholder);
-                    }
-                    errors.append("[").append(branch).append("] no SpringBoot module found; ");
-                    continue;
-                }
-
-                Path buildLogPath = buildLaunchService.buildLogPath(taskId, branch);
-                Files.createDirectories(buildLogPath.getParent());
-
-                // 占位删掉，立刻插入扫描到的真实模块行，状态 BUILDING
-                if (placeholder != null) {
-                    taskModuleMapper.deleteById(placeholder.getId());
-                    placeholder = null;
-                }
-                for (ModuleScanner.Module mod : modules) {
-                    TaskModule pre = newModuleRow(taskId, branch, mod, buildLogPath.toString());
-                    pre.setStatus("BUILDING");
-                    pre.setStartedAt(now());
-                    pre.setCommitSha(commitSha);
-                    pre.setCommitInfo(commitInfo);
-                    pre.setCommitMrIid(commitMrIid);
-                    taskModuleMapper.update(pre);
-                }
-
-                boolean buildOk = buildLaunchService.mvnBuild(repoRoot, modules, buildLogPath.toFile());
-                if (!buildOk) {
-                    for (ModuleScanner.Module mod : modules) {
-                        TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
-                        tm.setStatus("FAILED");
-                        tm.setErrorMessage("maven build failed");
-                        tm.setFinishedAt(now());
-                        tm.setCommitSha(commitSha);
-                        tm.setCommitInfo(commitInfo);
-                        tm.setCommitMrIid(commitMrIid);
-                        taskModuleMapper.update(tm);
-                        totalCount++;
-                    }
-                    errors.append("[").append(branch).append("] build failed; ");
-                    continue;
-                }
-
-                // 先把所有模块行落成 STARTING 状态，再用线程池并发 launchOne
-                // build 阶段串行(同一分支同一 workspace)，只把最后一步 java -jar 起进程并发化
-                List<TaskModule> tms = new ArrayList<>();
-                for (ModuleScanner.Module mod : modules) {
-                    totalCount++;
-                    TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
-                    tm.setStatus("STARTING");
-                    tm.setStartedAt(now());
-                    tm.setCommitSha(commitSha);
-                    tm.setCommitInfo(commitInfo);
-                    tm.setCommitMrIid(commitMrIid);
-                    taskModuleMapper.update(tm);
-                    tms.add(tm);
-                }
-
-                int concurrency = Math.max(1,
-                        Math.min(appProperties.getTask().getLaunchConcurrency(), modules.size()));
-                log.info("[TASK#{}] branch={} launching {} modules concurrency={}",
-                        taskId, branch, modules.size(), concurrency);
-                final Repo repoFinal = repo;
-                final File repoRootFinal = repoRoot;
-                ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
-                    Thread t = new Thread(r);
-                    t.setName("cs-launch-" + taskId + "-" + t.getId());
-                    t.setDaemon(true);
-                    return t;
-                });
+        ExecutorService branchPool = Executors.newFixedThreadPool(branchConcurrency, r -> {
+            Thread th = new Thread(r);
+            th.setName("cs-branch-" + taskId + "-" + th.getId());
+            th.setDaemon(true);
+            return th;
+        });
+        try {
+            List<Callable<BranchOutcome>> jobs = new ArrayList<>();
+            for (String branch : branches) {
+                final String b = branch;
+                jobs.add(() -> processBranch(taskId, task, repo, b));
+            }
+            List<Future<BranchOutcome>> futures = branchPool.invokeAll(jobs);
+            for (Future<BranchOutcome> f : futures) {
                 try {
-                    List<Callable<String>> jobs = new ArrayList<>();
-                    for (int i = 0; i < modules.size(); i++) {
-                        final ModuleScanner.Module mod = modules.get(i);
-                        final TaskModule tm = tms.get(i);
-                        jobs.add(() -> launchOne(taskId, repoFinal, repoRootFinal, mod, tm));
-                    }
-                    List<Future<String>> futures = pool.invokeAll(jobs);
-                    for (int i = 0; i < futures.size(); i++) {
-                        String err;
-                        try {
-                            err = futures.get(i).get();
-                        } catch (Exception e) {
-                            err = e.getMessage();
-                        }
-                        if (err == null) {
-                            successCount++;
-                        } else {
-                            errors.append("[").append(branch).append("/")
-                                    .append(modules.get(i).getName()).append("] ")
-                                    .append(err).append("; ");
-                        }
-                    }
-                } finally {
-                    pool.shutdown();
-                }
-            } catch (Exception e) {
-                log.error("[TASK#{}] branch processing failed: {}", taskId, branch, e);
-                errors.append("[").append(branch).append("] ").append(e.getMessage()).append("; ");
-                if (placeholder != null && placeholder.getId() != null) {
-                    TaskModule p = taskModuleMapper.findById(placeholder.getId());
-                    if (p != null && !"FAILED".equals(p.getStatus())) {
-                        p.setStatus("FAILED");
-                        p.setErrorMessage(e.getMessage());
-                        p.setFinishedAt(now());
-                        taskModuleMapper.update(p);
-                    }
+                    BranchOutcome bo = f.get();
+                    totalCount += bo.total;
+                    successCount += bo.success;
+                    if (bo.errors != null && !bo.errors.isEmpty()) errors.append(bo.errors);
+                } catch (Exception e) {
+                    errors.append("[branch] ").append(e.getMessage()).append("; ");
                 }
             }
-            log.info("[TASK#{}] <<< branch={} done", taskId, branch);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("[TASK#{}] interrupted", taskId, e);
+        } finally {
+            branchPool.shutdown();
         }
 
         String finalStatus;
@@ -306,13 +200,173 @@ public class TaskService {
         log.info("[TASK#{}] DONE status={} success={}/{}", taskId, finalStatus, successCount, totalCount);
     }
 
+    /** 分支一次跑完的统计。errors 是拼好的 "[branch/module] xxx; " 段，直接 append 到任务级 StringBuilder。 */
+    private static class BranchOutcome {
+        int total;
+        int success;
+        String errors = "";
+    }
+
+    /**
+     * 单分支从 clone → build → 并发 launch 的完整流程，作为跨分支并发的 job。
+     * 各分支独立 workspace 目录 + 独立 mvn build + 独立进程，线程安全。
+     */
+    private BranchOutcome processBranch(Long taskId, Task task, Repo repo, String branch) {
+        BranchOutcome out = new BranchOutcome();
+        StringBuilder errors = new StringBuilder();
+        log.info("[TASK#{}] >>> branch={} begin", taskId, branch);
+        TaskModule placeholder = taskModuleMapper.findPlaceholder(taskId, branch);
+        try {
+            if (placeholder != null) {
+                placeholder.setStatus("CLONING");
+                placeholder.setStartedAt(now());
+                taskModuleMapper.update(placeholder);
+            }
+            File repoRoot = buildLaunchService.ensureRepoClone(repo, branch);
+            String[] head = buildLaunchService.readHeadInfo(repoRoot);
+            String commitSha = head[0];
+            String commitInfo = head[1];
+            String commitMrIid = head.length > 2 ? head[2] : null;
+            if (commitInfo != null) {
+                log.info("[TASK#{}] branch={} HEAD -> {}{}", taskId, branch, commitInfo,
+                        commitMrIid != null ? " (!" + commitMrIid + ")" : "");
+            }
+            if (placeholder != null) {
+                placeholder.setStatus("SCANNING");
+                placeholder.setCommitSha(commitSha);
+                placeholder.setCommitInfo(commitInfo);
+                placeholder.setCommitMrIid(commitMrIid);
+                taskModuleMapper.update(placeholder);
+            }
+            List<ModuleScanner.Module> modules = buildLaunchService.scanModules(repoRoot, task.getModules());
+            log.info("[TASK#{}] branch={} scanned modules: {}", taskId, branch,
+                    modules.stream().map(m -> m.getName() + "(" + m.getRelativePath() + ")").collect(Collectors.toList()));
+            if (modules.isEmpty()) {
+                log.warn("[TASK#{}] no springboot module found in branch={}", taskId, branch);
+                if (placeholder != null) {
+                    placeholder.setStatus("FAILED");
+                    placeholder.setErrorMessage("no SpringBoot module found");
+                    placeholder.setFinishedAt(now());
+                    taskModuleMapper.update(placeholder);
+                }
+                errors.append("[").append(branch).append("] no SpringBoot module found; ");
+                out.errors = errors.toString();
+                return out;
+            }
+
+            Path buildLogPath = buildLaunchService.buildLogPath(taskId, branch);
+            Files.createDirectories(buildLogPath.getParent());
+
+            if (placeholder != null) {
+                taskModuleMapper.deleteById(placeholder.getId());
+                placeholder = null;
+            }
+            for (ModuleScanner.Module mod : modules) {
+                TaskModule pre = newModuleRow(taskId, branch, mod, buildLogPath.toString());
+                pre.setStatus("BUILDING");
+                pre.setStartedAt(now());
+                pre.setCommitSha(commitSha);
+                pre.setCommitInfo(commitInfo);
+                pre.setCommitMrIid(commitMrIid);
+                taskModuleMapper.update(pre);
+            }
+
+            boolean buildOk = buildLaunchService.mvnBuild(repoRoot, modules, buildLogPath.toFile());
+            if (!buildOk) {
+                for (ModuleScanner.Module mod : modules) {
+                    TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
+                    tm.setStatus("FAILED");
+                    tm.setErrorMessage("maven build failed");
+                    tm.setFinishedAt(now());
+                    tm.setCommitSha(commitSha);
+                    tm.setCommitInfo(commitInfo);
+                    tm.setCommitMrIid(commitMrIid);
+                    taskModuleMapper.update(tm);
+                    out.total++;
+                }
+                errors.append("[").append(branch).append("] build failed; ");
+                out.errors = errors.toString();
+                return out;
+            }
+
+            // 先把所有模块行落成 STARTING 状态，再用线程池并发 launchOne
+            List<TaskModule> tms = new ArrayList<>();
+            for (ModuleScanner.Module mod : modules) {
+                out.total++;
+                TaskModule tm = newModuleRow(taskId, branch, mod, buildLogPath.toString());
+                tm.setStatus("STARTING");
+                tm.setStartedAt(now());
+                tm.setCommitSha(commitSha);
+                tm.setCommitInfo(commitInfo);
+                tm.setCommitMrIid(commitMrIid);
+                taskModuleMapper.update(tm);
+                tms.add(tm);
+            }
+
+            int concurrency = Math.max(1,
+                    Math.min(appProperties.getTask().getLaunchConcurrency(), modules.size()));
+            log.info("[TASK#{}] branch={} launching {} modules concurrency={}",
+                    taskId, branch, modules.size(), concurrency);
+            final File repoRootFinal = repoRoot;
+            final boolean keepAlive = !Boolean.FALSE.equals(task.getKeepAlive());
+            ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
+                Thread t = new Thread(r);
+                t.setName("cs-launch-" + taskId + "-" + t.getId());
+                t.setDaemon(true);
+                return t;
+            });
+            try {
+                List<Callable<String>> jobs = new ArrayList<>();
+                for (int i = 0; i < modules.size(); i++) {
+                    final ModuleScanner.Module mod = modules.get(i);
+                    final TaskModule tm = tms.get(i);
+                    jobs.add(() -> launchOne(taskId, repo, repoRootFinal, mod, tm, keepAlive));
+                }
+                List<Future<String>> futures = pool.invokeAll(jobs);
+                for (int i = 0; i < futures.size(); i++) {
+                    String err;
+                    try {
+                        err = futures.get(i).get();
+                    } catch (Exception e) {
+                        err = e.getMessage();
+                    }
+                    if (err == null) {
+                        out.success++;
+                    } else {
+                        errors.append("[").append(branch).append("/")
+                                .append(modules.get(i).getName()).append("] ")
+                                .append(err).append("; ");
+                    }
+                }
+            } finally {
+                pool.shutdown();
+            }
+        } catch (Exception e) {
+            log.error("[TASK#{}] branch processing failed: {}", taskId, branch, e);
+            errors.append("[").append(branch).append("] ").append(e.getMessage()).append("; ");
+            if (placeholder != null && placeholder.getId() != null) {
+                TaskModule p = taskModuleMapper.findById(placeholder.getId());
+                if (p != null && !"FAILED".equals(p.getStatus())) {
+                    p.setStatus("FAILED");
+                    p.setErrorMessage(e.getMessage());
+                    p.setFinishedAt(now());
+                    taskModuleMapper.update(p);
+                }
+            }
+        }
+        log.info("[TASK#{}] <<< branch={} done", taskId, branch);
+        out.errors = errors.toString();
+        return out;
+    }
+
     /**
      * 启动单个模块：申请端口 → 拉真实 launchModule → 回写 SUCCESS/FAILED 状态。
      * 调用前 tm 应已经落成 STARTING 状态（含 commit info 等元信息）。
      * 返回 null 表示成功；返回非 null 是错误摘要，供上层拼进 errors。
      * 线程安全：portPool 是 synchronized 的，taskModuleMapper 通过 Hikari 连接池并发无问题。
      */
-    private String launchOne(Long taskId, Repo repo, File repoRoot, ModuleScanner.Module mod, TaskModule tm) {
+    private String launchOne(Long taskId, Repo repo, File repoRoot, ModuleScanner.Module mod, TaskModule tm,
+                             boolean keepAlive) {
         Integer port = portPool.acquire();
         if (port == null) {
             tm.setStatus("FAILED");
@@ -335,10 +389,20 @@ public class TaskService {
             tm.setPort(lr.getPort());
             tm.setSwaggerUrl(lr.getSwaggerUrl());
             if (lr.isSuccess()) {
-                tm.setStatus("SUCCESS");
-                tm.setKeepAliveUntil(LocalDateTime.now()
-                        .plusMinutes(appProperties.getWorkspace().getKeepAliveMinutes())
-                        .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                if (!keepAlive) {
+                    // 用户勾了"不保活"：启动 + swagger 探测都过了，走完流程立刻停进程释放端口
+                    log.info("[TASK#{}] branch={} module={} success, keep-alive off -> stopping now",
+                            taskId, tm.getBranch(), mod.getName());
+                    ProcessManager.killTree(lr.getProcess(), lr.getPid(), lr.getPgid());
+                    portPool.release(port);
+                    tm.setStatus("STOPPED");
+                    tm.setKeepAliveUntil(null);
+                } else {
+                    tm.setStatus("SUCCESS");
+                    tm.setKeepAliveUntil(LocalDateTime.now()
+                            .plusSeconds(appProperties.getWorkspace().getKeepAliveSeconds())
+                            .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                }
                 tm.setFinishedAt(now());
                 taskModuleMapper.update(tm);
                 return null;
@@ -408,9 +472,10 @@ public class TaskService {
         taskModuleMapper.update(tm);
 
         ModuleScanner.Module mod = new ModuleScanner.Module(tm.getModuleName(), tm.getModulePath());
-        log.info("[RETRY] module={} branch={} name={} path={}",
-                moduleId, tm.getBranch(), tm.getModuleName(), tm.getModulePath());
-        String err = launchOne(tm.getTaskId(), repo, repoRoot, mod, tm);
+        boolean keepAlive = !Boolean.FALSE.equals(task.getKeepAlive());
+        log.info("[RETRY] module={} branch={} name={} path={} keepAlive={}",
+                moduleId, tm.getBranch(), tm.getModuleName(), tm.getModulePath(), keepAlive);
+        String err = launchOne(tm.getTaskId(), repo, repoRoot, mod, tm, keepAlive);
         log.info("[RETRY] module={} done result={}", moduleId, err == null ? "OK" : err);
     }
 

@@ -24,7 +24,12 @@ public class KeepAliveSweeper {
         this.portPool = portPool;
     }
 
-    @Scheduled(fixedDelay = 30000L, initialDelay = 30000L)
+    // 用 SpEL 从 AppProperties 拿间隔（秒），乘 1000 转毫秒；默认 5s（保活支持秒级精度）。
+    // 老逻辑固定 30s 太粗，keepAliveSeconds=30 会漂到接近 60s。
+    @Scheduled(fixedDelayString =
+            "#{@appProperties.workspace.keepAliveCheckIntervalSeconds * 1000L}",
+            initialDelayString =
+            "#{@appProperties.workspace.keepAliveCheckIntervalSeconds * 1000L}")
     public void sweep() {
         List<TaskModule> alive = taskModuleMapper.findAliveCandidates();
         LocalDateTime now = LocalDateTime.now();
