@@ -16,4 +16,6 @@ public class Task {
     private String finishedAt;
     /** 启动成功后是否保活。false → SUCCESS 立刻 stop 释放端口，用于快速走一遍启动+swagger 验证。 */
     private Boolean keepAlive = Boolean.TRUE;
+    /** 任务终态时推送汇总的钉钉 webhook id；null 则不推。指向 notification_webhook.id */
+    private Long notifyWebhookId;
 }

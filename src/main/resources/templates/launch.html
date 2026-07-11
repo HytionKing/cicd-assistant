@@ -64,17 +64,29 @@
                             </div>
                         </div>
 
-                        <div class="d-flex align-items-center mt-4">
-                            <label class="form-check form-switch mb-0">
-                                <input id="chk-keep-alive" class="form-check-input" type="checkbox" checked/>
-                                <span class="form-check-label">启动后保活</span>
-                            </label>
-                            <span class="text-secondary small ms-2" id="keep-alive-hint">保留进程供访问</span>
-                            <div class="ms-auto">
-                                <button id="btn-start" class="btn btn-primary">
-                                    <i class="ti ti-player-play me-1"></i>开始验证
-                                </button>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label mb-1">
+                                    <i class="ti ti-bell me-1"></i>结果推送
+                                </label>
+                                <select id="sel-webhook" class="form-select form-select-sm">
+                                    <option value="">不推送</option>
+                                </select>
+                                <small class="form-hint">任务终态时把汇总结果推到选中的钉钉群；<a href="/notifications">管理 webhook</a></small>
                             </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <label class="form-check form-switch mb-0">
+                                    <input id="chk-keep-alive" class="form-check-input" type="checkbox" checked/>
+                                    <span class="form-check-label">启动后保活</span>
+                                </label>
+                                <span class="text-secondary small ms-2" id="keep-alive-hint">保留进程供访问</span>
+                            </div>
+                        </div>
+
+                        <div class="text-end mt-4">
+                            <button id="btn-start" class="btn btn-primary">
+                                <i class="ti ti-player-play me-1"></i>开始验证
+                            </button>
                         </div>
                     </div>
                 </div>

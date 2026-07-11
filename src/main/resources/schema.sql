@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS task (
     created_at TEXT,
     started_at TEXT,
     finished_at TEXT,
-    keep_alive INTEGER NOT NULL DEFAULT 1
+    keep_alive INTEGER NOT NULL DEFAULT 1,
+    notify_webhook_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS task_module (

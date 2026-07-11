@@ -383,6 +383,17 @@
     vertical-align: -3px;
 }
 
+/* 任务列表页的 sticky 页头：滚动列表时标题+筛选条不跟着走 */
+.page-header-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--tblr-body-bg);
+    /* 底部一条细线让 sticky 状态跟下面的卡片有清晰分界 */
+    border-bottom: 1px solid var(--tblr-border-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
 /* 任务详情：同分支多模块合并单元格。右侧加淡分隔线让分组一目了然，
  * 顶端加实分隔线区分不同分支块（rowspan cell 本身跨多行 border 不好画，
  * 用组第一行的 border-top 代替）。 */

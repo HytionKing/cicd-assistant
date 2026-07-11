@@ -35,6 +35,8 @@ public class SchemaMigrator implements ApplicationRunner {
         ensureColumn("task_module", "commit_mr_iid", "TEXT");
         // 用户可在创建任务时关掉保活：启动验证过就立刻 stop，避免多模块并存把内存压爆
         ensureColumn("task", "keep_alive", "INTEGER NOT NULL DEFAULT 1");
+        // 创建任务时可绑定通知 webhook；任务终态时把汇总结果推到群
+        ensureColumn("task", "notify_webhook_id", "INTEGER");
     }
 
     private void ensureColumn(String table, String column, String type) {

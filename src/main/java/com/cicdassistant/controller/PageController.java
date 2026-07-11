@@ -74,8 +74,9 @@ public class PageController {
         return "compare-contexts";
     }
 
-    @GetMapping("/compare/webhooks")
-    public String compareWebhooks() {
-        return "compare-webhooks";
+    // ---- 通知配置（一级菜单，代码启动 / 合并检测都用同一份 webhook 列表）----
+    @GetMapping("/notifications")
+    public String notifications() {
+        return "notifications";
     }
 }
