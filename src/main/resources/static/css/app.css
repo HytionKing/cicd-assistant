@@ -383,15 +383,19 @@
     vertical-align: -3px;
 }
 
-/* 任务列表页的 sticky 页头：滚动列表时标题+筛选条不跟着走 */
-.page-header-sticky {
+/* 任务列表页的 sticky 页头：滚动列表时标题+筛选条不跟着走。
+ * 关键：Tabler 默认给 .page-header 加了 margin-top（page-padding-y），sticky 后会残留
+ * 一段空白让人以为没贴顶；上下 padding 自己给足并压掉 margin，视觉才明显。 */
+.page-header.page-header-sticky {
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: var(--tblr-body-bg);
-    /* 底部一条细线让 sticky 状态跟下面的卡片有清晰分界 */
+    margin-top: 0 !important;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    background-color: var(--tblr-bg-surface);
     border-bottom: 1px solid var(--tblr-border-color);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 /* 任务详情：同分支多模块合并单元格。右侧加淡分隔线让分组一目了然，
