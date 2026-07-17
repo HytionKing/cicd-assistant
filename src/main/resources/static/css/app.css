@@ -388,8 +388,9 @@
  * 一段空白让人以为没贴顶；上下 padding 自己给足并压掉 margin，视觉才明显。
  * 视觉对比：给足以下 shadow + 底边线，让"贴顶栏"和下方卡片一眼分得开。 */
 .page-header.page-header-sticky {
-    position: sticky;
-    top: 0;
+    position: -webkit-sticky !important;  /* Safari 老版本兼容 */
+    position: sticky !important;
+    top: 0 !important;
     z-index: 20;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
@@ -398,6 +399,13 @@
     border-bottom: 1px solid var(--tblr-border-color);
     /* 明显的下沉阴影，避免跟白底卡片粘一起看不出层级 */
     box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+/* 兜底：确保 sticky 页头的所有祖先没有 overflow 卡死。Tabler 默认没设，但用户
+ * 环境可能有插件/主题覆盖，这里显式声明可以兜住。 */
+body:has(.page-header.page-header-sticky),
+.page:has(.page-header.page-header-sticky),
+.page-wrapper:has(.page-header.page-header-sticky) {
+    overflow: visible !important;
 }
 /* sticky 页头下的 page-body 靠上一点，让分隔更贴合 */
 .page-header.page-header-sticky + .page-body {
