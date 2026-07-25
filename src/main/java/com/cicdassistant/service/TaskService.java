@@ -15,9 +15,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import org.apache.commons.io.FileUtils;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -62,6 +65,32 @@ public class TaskService {
                            Long notifyWebhookId) {
         Repo repo = repoService.findByIdMasked(repoId);
         if (repo == null) throw new IllegalArgumentException("repo not found: " + repoId);
+
+        // 同 repo + 同 branch 不允许并发。workspace 是共享的（workspace/<repo>/<branch>/），
+        // 两个任务并发对同一目录跑 mvn clean package，jar 会互相覆盖，进程也可能拉起错误版本。
+        List<String> normalizedNew = new ArrayList<>();
+        for (String b : branches) {
+            if (b == null) continue;
+            String bt = b.trim();
+            if (!bt.isEmpty()) normalizedNew.add(bt);
+        }
+        List<Task> active = taskMapper.findActiveByRepo(repoId);
+        List<String> conflicts = new ArrayList<>();
+        for (Task a : active) {
+            if (a.getBranches() == null) continue;
+            for (String existing : a.getBranches().split(",")) {
+                String e = existing.trim();
+                if (e.isEmpty()) continue;
+                if (normalizedNew.contains(e)) {
+                    conflicts.add(e + "（任务 #" + a.getId() + "）");
+                }
+            }
+        }
+        if (!conflicts.isEmpty()) {
+            throw new IllegalArgumentException(
+                "以下分支已有活跃任务在跑，不允许并发（会覆盖 jar / 端口冲突）：" + String.join(", ", conflicts));
+        }
+
         Task t = new Task();
         t.setRepoId(repoId);
         t.setRepoName(repo.getName());
@@ -119,6 +148,17 @@ public class TaskService {
         }
         taskModuleMapper.deleteByTaskId(id);
         taskMapper.deleteById(id);
+        // 顺手清 build-logs/task-<id>/ 整目录（含 build.log + 各模块 run 日志）；
+        // workspace/<repo>/<branch>/ 是同分支任务共享的不能动，动了会破坏其它任务的重试
+        File logDir = Paths.get(appProperties.getPaths().getBuildLogDir(), "task-" + id).toFile();
+        if (logDir.exists()) {
+            try {
+                FileUtils.deleteDirectory(logDir);
+                log.info("[TASK#{}] cleaned log dir {}", id, logDir.getAbsolutePath());
+            } catch (Exception e) {
+                log.warn("[TASK#{}] clean log dir failed: {}", id, e.getMessage());
+            }
+        }
     }
 
     public void stopModule(TaskModule m) {
@@ -314,6 +354,7 @@ public class TaskService {
             }
 
             // 先把所有模块行落成 STARTING 状态，再用线程池并发 launchOne
+            // 走到这里说明 mvn build 成功，标记 buildSuccess=true 让"重试"按钮之后可用
             List<TaskModule> tms = new ArrayList<>();
             for (ModuleScanner.Module mod : modules) {
                 out.total++;
@@ -323,6 +364,7 @@ public class TaskService {
                 tm.setCommitSha(commitSha);
                 tm.setCommitInfo(commitInfo);
                 tm.setCommitMrIid(commitMrIid);
+                tm.setBuildSuccess(Boolean.TRUE);
                 taskModuleMapper.update(tm);
                 tms.add(tm);
             }
@@ -464,6 +506,12 @@ public class TaskService {
         }
         if (!"FAILED".equals(tm.getStatus())) {
             log.warn("[RETRY] module={} status={} not FAILED, skip", moduleId, tm.getStatus());
+            return;
+        }
+        // 只有本任务本模块 mvn build 成功过一次才允许重试；否则 target/ 里的 jar
+        // 可能是同分支上次任务残留，重试会拉起错误版本
+        if (!Boolean.TRUE.equals(tm.getBuildSuccess())) {
+            log.warn("[RETRY] module={} build never succeeded, skip", moduleId);
             return;
         }
         Task task = taskMapper.findById(tm.getTaskId());

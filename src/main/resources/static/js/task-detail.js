@@ -127,7 +127,7 @@ function swaggerCell(m) {
                     data-branch="${escapeHtml(m.branch || '')}"
                     data-status="${escapeHtml(m.status || '')}"><i class="ti ti-file-text me-1"></i>日志</button>
             ${m.status === 'SUCCESS' || m.status === 'RUNNING' ? `<button class="btn btn-sm btn-outline-danger" data-act="stop" data-id="${m.id}"><i class="ti ti-player-stop me-1"></i>停止</button>` : ''}
-            ${m.status === 'FAILED' ? `<button class="btn btn-sm btn-outline-primary" data-act="retry" data-id="${m.id}"
+            ${(m.status === 'FAILED' && m.buildSuccess) ? `<button class="btn btn-sm btn-outline-primary" data-act="retry" data-id="${m.id}"
                     data-name="${escapeHtml(m.moduleName || '')}"><i class="ti ti-refresh me-1"></i>重试</button>` : ''}
           </div>
         </td>

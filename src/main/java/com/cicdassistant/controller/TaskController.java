@@ -74,6 +74,12 @@ public class TaskController {
             body.put("message", "只有 FAILED 状态可重试，当前=" + m.getStatus());
             return ResponseEntity.badRequest().body(body);
         }
+        if (!Boolean.TRUE.equals(m.getBuildSuccess())) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("error", "build_never_succeeded");
+            body.put("message", "本任务本模块从未 mvn build 成功，无法重试（target 下可能是同分支上次任务残留的 jar，直接重启会拉错版本）。请重新提交任务");
+            return ResponseEntity.badRequest().body(body);
+        }
         taskService.retryModuleAsync(moduleId);
         // 前端 api.post 对 202 会尝试 r.json()，返回一个占位 body 免得解析报错
         Map<String, Object> ok = new HashMap<>();

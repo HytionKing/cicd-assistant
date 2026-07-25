@@ -37,6 +37,10 @@ public class SchemaMigrator implements ApplicationRunner {
         ensureColumn("task", "keep_alive", "INTEGER NOT NULL DEFAULT 1");
         // 创建任务时可绑定通知 webhook；任务终态时把汇总结果推到群
         ensureColumn("task", "notify_webhook_id", "INTEGER");
+        // 本任务本模块是否至少 mvn build 成功过一次（决定"重试"按钮能否显示）。
+        // 场景：同分支复用 workspace，target/ 里的 jar 可能是上次任务残留，
+        //       如果本次 build 从未成功，直接重试会拉起老 jar，很危险。
+        ensureColumn("task_module", "build_success", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private void ensureColumn(String table, String column, String type) {

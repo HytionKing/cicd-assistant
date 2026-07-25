@@ -27,4 +27,7 @@ public class TaskModule {
     private String commitInfo;
     /** GitLab merge commit body 里挖到的 MR iid（不带 ! 前缀），非 GitLab / 非 merge commit 时为 null。 */
     private String commitMrIid;
+    /** 本任务本模块是否至少 mvn build 成功过一次。false 时 target/ 里可能是上次任务残留 jar，
+     *  重试按钮不显示避免拉起错误版本。用 Boolean 而非 boolean，让 mybatis 从 INTEGER 列自动映射。 */
+    private Boolean buildSuccess = Boolean.FALSE;
 }
