@@ -3,9 +3,6 @@
   const pagerEl = document.getElementById('task-pager');
   const countHint = document.getElementById('task-count-hint');
   const form = document.getElementById('filter-form');
-  const repoBtnLabel = document.getElementById('f-repo-btn-label');
-  const repoListBox = document.getElementById('f-repo-list');
-  const inpBranch = document.getElementById('f-branch');
   const selStatus = document.getElementById('f-status');
   const inpFrom = document.getElementById('f-from');
   const inpTo = document.getElementById('f-to');
@@ -17,38 +14,36 @@
   // 保存当前生效的筛选条件（提交查询时才刷新），轮询按同一份条件重拉
   let filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
 
-  // 仓库多选：Tabler dropdown + form-check checkbox 列表。触发按钮显示已选个数。
+  // 仓库多选：tom-select 接管，remove_button 插件加叉号可移除单个
   let allRepos = [];
   try {
     allRepos = await api.get('/api/repos') || [];
   } catch (e) { /* 静默 */ }
-  repoListBox.innerHTML = allRepos.length === 0
-    ? '<div class="text-secondary small px-2 py-1">（没有仓库）</div>'
-    : allRepos.map(r =>
-        `<label class="form-check mb-0 px-2 py-1">
-           <input type="checkbox" class="form-check-input" value="${r.id}" data-repo-check/>
-           <span class="form-check-label">${escapeHtml(r.name)}</span>
-         </label>`
-      ).join('');
+  const repoTs = new TomSelect('#f-repo', {
+    plugins: ['remove_button'],
+    valueField: 'id',
+    labelField: 'name',
+    searchField: 'name',
+    options: allRepos,
+    maxOptions: 200,
+    placeholder: '全部仓库',
+    hideSelected: true
+  });
 
-  function getCheckedRepoIds() {
-    return Array.from(repoListBox.querySelectorAll('[data-repo-check]:checked')).map(i => i.value);
-  }
-  function updateRepoBtnLabel() {
-    const ids = getCheckedRepoIds();
-    if (ids.length === 0) {
-      repoBtnLabel.textContent = '全部仓库';
-      repoBtnLabel.className = 'text-secondary';
-    } else if (ids.length === 1) {
-      const r = allRepos.find(x => String(x.id) === ids[0]);
-      repoBtnLabel.textContent = r ? r.name : ids[0];
-      repoBtnLabel.className = '';
-    } else {
-      repoBtnLabel.textContent = `已选 ${ids.length} 个仓库`;
-      repoBtnLabel.className = '';
-    }
-  }
-  repoListBox.addEventListener('change', updateRepoBtnLabel);
+  // 分支多选：无远端候选，允许用户键入回车自由创建 tag（create: true + delimiter 分割）
+  const branchTs = new TomSelect('#f-branch', {
+    plugins: ['remove_button'],
+    create: true,
+    createOnBlur: true,
+    persist: false,
+    delimiter: ',',
+    placeholder: '留空=全部；输入分支名回车添加'
+  });
+
+  // 日期：flatpickr 中文本地化。ISO 格式（Y-m-d）跟后端 normalizeFrom/To 期望一致
+  flatpickr.localize(flatpickr.l10ns.zh);
+  const fromFp = flatpickr('#f-from', { dateFormat: 'Y-m-d', allowInput: true });
+  const toFp   = flatpickr('#f-to',   { dateFormat: 'Y-m-d', allowInput: true });
 
   function statusBadge(s) {
     const cls = STATUS_BADGE[s] || 'bg-secondary-lt';
@@ -174,8 +169,8 @@
   form.addEventListener('submit', (ev) => {
     ev.preventDefault();
     filters = {
-      repoIds: getCheckedRepoIds(),
-      branches: inpBranch.value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean),
+      repoIds: repoTs.getValue() || [],
+      branches: branchTs.getValue() || [],
       status: selStatus.value,
       from: inpFrom.value,
       to: inpTo.value
@@ -187,12 +182,12 @@
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     // 清空表单并回到无筛选状态
-    repoListBox.querySelectorAll('[data-repo-check]').forEach(i => i.checked = false);
-    updateRepoBtnLabel();
-    inpBranch.value = '';
+    repoTs.clear();
+    branchTs.clear();
+    branchTs.clearOptions();
     selStatus.value = '';
-    inpFrom.value = '';
-    inpTo.value = '';
+    fromFp.clear();
+    toFp.clear();
     filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
     currentPage = 1;
     lastPagerState = '';

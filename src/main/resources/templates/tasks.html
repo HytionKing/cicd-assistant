@@ -7,7 +7,9 @@
     <title>任务列表 - CICD Assistant</title>
     <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
     <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
-    <link rel="stylesheet" th:href="@{/css/app.css(v=20260725-tasks2)}"/>
+    <link rel="stylesheet" th:href="@{/vendor/tom-select/css/tom-select.bootstrap5.min.css}"/>
+    <link rel="stylesheet" th:href="@{/vendor/flatpickr/css/flatpickr.min.css}"/>
+    <link rel="stylesheet" th:href="@{/css/app.css(v=20260725-tasks3)}"/>
 </head>
 <body>
 <div class="page">
@@ -25,25 +27,15 @@
                         </button>
                     </div>
                 </div>
-                <!-- 查询表单：Enter 提交、"重置"清空并刷新。全部用 Tabler / Bootstrap 标准 class -->
+                <!-- 查询表单：tom-select 接管仓库/分支多选，flatpickr 接管日期。Enter 提交、"重置"清空 -->
                 <form id="filter-form" class="row g-2 align-items-end">
                     <div class="col-md-3">
                         <label class="form-label mb-1 small">仓库（多选）</label>
-                        <!-- Tabler dropdown + checkbox 列表：纯 Tabler class，触发按钮伪装成 form-select 保持视觉一致 -->
-                        <div class="dropdown" id="f-repo-dd">
-                            <button type="button" class="form-select form-select-sm text-start"
-                                    data-bs-toggle="dropdown" data-bs-auto-close="outside"
-                                    aria-expanded="false" id="f-repo-btn">
-                                <span id="f-repo-btn-label" class="text-secondary">全部仓库</span>
-                            </button>
-                            <div class="dropdown-menu w-100 p-2" style="max-height:260px;overflow-y:auto">
-                                <div id="f-repo-list" class="d-flex flex-column gap-1"></div>
-                            </div>
-                        </div>
+                        <select id="f-repo" multiple placeholder="全部仓库"></select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label mb-1 small">分支（多个用逗号分隔）</label>
-                        <input id="f-branch" type="text" class="form-control form-control-sm" placeholder="env-1, env-2"/>
+                        <label class="form-label mb-1 small">分支（多个，可输入回车创建）</label>
+                        <select id="f-branch" multiple placeholder="留空=全部；输入分支名回车添加"></select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label mb-1 small">状态</label>
@@ -59,11 +51,11 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label mb-1 small">创建时间起</label>
-                        <input id="f-from" type="date" class="form-control form-control-sm"/>
+                        <input id="f-from" type="text" class="form-control form-control-sm" placeholder="选择日期"/>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label mb-1 small">创建时间止</label>
-                        <input id="f-to" type="date" class="form-control form-control-sm"/>
+                        <input id="f-to" type="text" class="form-control form-control-sm" placeholder="选择日期"/>
                     </div>
                     <div class="col-12 d-flex justify-content-end gap-2">
                         <button type="button" id="btn-reset" class="btn btn-sm">
@@ -99,6 +91,9 @@
     </div>
 </div>
 <script th:src="@{/vendor/tabler/js/tabler.min.js}"></script>
+<script th:src="@{/vendor/tom-select/js/tom-select.complete.min.js}"></script>
+<script th:src="@{/vendor/flatpickr/js/flatpickr.min.js}"></script>
+<script th:src="@{/vendor/flatpickr/l10n/zh.js}"></script>
 <script th:src="@{/js/app.js}"></script>
 <script th:src="@{/js/ui.js}"></script>
 <script th:src="@{/js/tasks.js}"></script>
