@@ -129,6 +129,19 @@ public class TaskService {
         return taskMapper.count();
     }
 
+    /** 带筛选的分页；空参数 = 不过滤。前端把 date 补成时间边界后传进来，服务不再做时区补偿 */
+    public List<Task> pageFiltered(List<Long> repoIds, List<String> branches, String status,
+                                   String createdFrom, String createdTo, int page, int size) {
+        int p = Math.max(1, page);
+        int s = Math.min(Math.max(1, size), 100);
+        return taskMapper.findPageFiltered(repoIds, branches, status, createdFrom, createdTo, (p - 1) * s, s);
+    }
+
+    public int totalFiltered(List<Long> repoIds, List<String> branches, String status,
+                             String createdFrom, String createdTo) {
+        return taskMapper.countFiltered(repoIds, branches, status, createdFrom, createdTo);
+    }
+
     public Task get(Long id) {
         return taskMapper.findById(id);
     }
