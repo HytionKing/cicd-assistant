@@ -7,7 +7,7 @@
     <title>任务列表 - CICD Assistant</title>
     <link rel="stylesheet" th:href="@{/vendor/tabler/css/tabler.min.css}"/>
     <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
-    <link rel="stylesheet" th:href="@{/css/app.css(v=20260725-tasks)}"/>
+    <link rel="stylesheet" th:href="@{/css/app.css(v=20260725-tasks2)}"/>
 </head>
 <body>
 <div class="page">
@@ -25,11 +25,21 @@
                         </button>
                     </div>
                 </div>
-                <!-- 查询表单：Enter 提交、"重置"清空并刷新 -->
+                <!-- 查询表单：Enter 提交、"重置"清空并刷新。全部用 Tabler / Bootstrap 标准 class -->
                 <form id="filter-form" class="row g-2 align-items-end">
                     <div class="col-md-3">
                         <label class="form-label mb-1 small">仓库（多选）</label>
-                        <select id="f-repo" class="form-select form-select-sm" multiple size="1" style="height:calc(1.4285714286em + 0.5rem + 2px)"></select>
+                        <!-- Tabler dropdown + checkbox 列表：纯 Tabler class，触发按钮伪装成 form-select 保持视觉一致 -->
+                        <div class="dropdown" id="f-repo-dd">
+                            <button type="button" class="form-select form-select-sm text-start"
+                                    data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                    aria-expanded="false" id="f-repo-btn">
+                                <span id="f-repo-btn-label" class="text-secondary">全部仓库</span>
+                            </button>
+                            <div class="dropdown-menu w-100 p-2" style="max-height:260px;overflow-y:auto">
+                                <div id="f-repo-list" class="d-flex flex-column gap-1"></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label mb-1 small">分支（多个用逗号分隔）</label>

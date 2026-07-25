@@ -3,7 +3,8 @@
   const pagerEl = document.getElementById('task-pager');
   const countHint = document.getElementById('task-count-hint');
   const form = document.getElementById('filter-form');
-  const selRepo = document.getElementById('f-repo');
+  const repoBtnLabel = document.getElementById('f-repo-btn-label');
+  const repoListBox = document.getElementById('f-repo-list');
   const inpBranch = document.getElementById('f-branch');
   const selStatus = document.getElementById('f-status');
   const inpFrom = document.getElementById('f-from');
@@ -16,17 +17,38 @@
   // 保存当前生效的筛选条件（提交查询时才刷新），轮询按同一份条件重拉
   let filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
 
-  // 拉一次仓库列表填充多选。项目里没有 select2 之类的库，就用原生 select multiple，
-  // 高度压到一行，用户用 Ctrl / Cmd + 点击多选（写在 title 提示里）
+  // 仓库多选：Tabler dropdown + form-check checkbox 列表。触发按钮显示已选个数。
+  let allRepos = [];
   try {
-    const repos = await api.get('/api/repos');
-    selRepo.innerHTML = (repos || []).map(r =>
-      `<option value="${r.id}">${escapeHtml(r.name)}</option>`
-    ).join('');
-    selRepo.title = '按住 Ctrl / Cmd 可多选';
-  } catch (e) {
-    selRepo.innerHTML = '<option value="">(仓库列表加载失败)</option>';
+    allRepos = await api.get('/api/repos') || [];
+  } catch (e) { /* 静默 */ }
+  repoListBox.innerHTML = allRepos.length === 0
+    ? '<div class="text-secondary small px-2 py-1">（没有仓库）</div>'
+    : allRepos.map(r =>
+        `<label class="form-check mb-0 px-2 py-1">
+           <input type="checkbox" class="form-check-input" value="${r.id}" data-repo-check/>
+           <span class="form-check-label">${escapeHtml(r.name)}</span>
+         </label>`
+      ).join('');
+
+  function getCheckedRepoIds() {
+    return Array.from(repoListBox.querySelectorAll('[data-repo-check]:checked')).map(i => i.value);
   }
+  function updateRepoBtnLabel() {
+    const ids = getCheckedRepoIds();
+    if (ids.length === 0) {
+      repoBtnLabel.textContent = '全部仓库';
+      repoBtnLabel.className = 'text-secondary';
+    } else if (ids.length === 1) {
+      const r = allRepos.find(x => String(x.id) === ids[0]);
+      repoBtnLabel.textContent = r ? r.name : ids[0];
+      repoBtnLabel.className = '';
+    } else {
+      repoBtnLabel.textContent = `已选 ${ids.length} 个仓库`;
+      repoBtnLabel.className = '';
+    }
+  }
+  repoListBox.addEventListener('change', updateRepoBtnLabel);
 
   function statusBadge(s) {
     const cls = STATUS_BADGE[s] || 'bg-secondary-lt';
@@ -152,7 +174,7 @@
   form.addEventListener('submit', (ev) => {
     ev.preventDefault();
     filters = {
-      repoIds: Array.from(selRepo.selectedOptions).map(o => o.value).filter(Boolean),
+      repoIds: getCheckedRepoIds(),
       branches: inpBranch.value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean),
       status: selStatus.value,
       from: inpFrom.value,
@@ -165,7 +187,8 @@
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     // 清空表单并回到无筛选状态
-    Array.from(selRepo.options).forEach(o => o.selected = false);
+    repoListBox.querySelectorAll('[data-repo-check]').forEach(i => i.checked = false);
+    updateRepoBtnLabel();
     inpBranch.value = '';
     selStatus.value = '';
     inpFrom.value = '';
