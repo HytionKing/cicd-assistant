@@ -40,6 +40,11 @@
     placeholder: '留空=全部；输入分支名回车添加'
   });
 
+  // tom-select 不会自动把 <select> 的 form-select class 复制到生成的 wrapper 上，
+  // 手动加一下让边框/背景走 Tabler 的 form-select 样式
+  repoTs.wrapper.classList.add('form-select', 'form-select-sm');
+  branchTs.wrapper.classList.add('form-select', 'form-select-sm');
+
   // 日期：flatpickr 中文本地化。ISO 格式（Y-m-d）跟后端 normalizeFrom/To 期望一致
   flatpickr.localize(flatpickr.l10ns.zh);
   const fromFp = flatpickr('#f-from', { dateFormat: 'Y-m-d', allowInput: true });
