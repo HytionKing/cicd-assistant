@@ -26,13 +26,51 @@ public class TaskController {
 
     @GetMapping
     public Map<String, Object> list(@RequestParam(defaultValue = "1") int page,
-                                    @RequestParam(defaultValue = "20") int size) {
+                                    @RequestParam(defaultValue = "20") int size,
+                                    @RequestParam(required = false) List<Long> repoIds,
+                                    @RequestParam(required = false) List<String> branches,
+                                    @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String createdFrom,
+                                    @RequestParam(required = false) String createdTo) {
+        // 空/空白参数一律归为 null，让 Mapper <if> 走"不过滤"分支
+        List<Long> ri = (repoIds == null || repoIds.isEmpty()) ? null : repoIds;
+        List<String> bs = null;
+        if (branches != null && !branches.isEmpty()) {
+            List<String> trimmed = new java.util.ArrayList<>();
+            for (String b : branches) {
+                if (b == null) continue;
+                String t = b.trim();
+                if (!t.isEmpty()) trimmed.add(t);
+            }
+            if (!trimmed.isEmpty()) bs = trimmed;
+        }
+        String st = (status == null || status.trim().isEmpty()) ? null : status.trim();
+        // 前端只传 yyyy-MM-dd，这里补成时间边界与 ISO_LOCAL_DATE_TIME 字符串比较一致
+        String cf = normalizeFrom(createdFrom);
+        String ct = normalizeTo(createdTo);
+
         Map<String, Object> r = new HashMap<>();
-        r.put("items", taskService.page(page, size));
-        r.put("total", taskService.total());
+        r.put("items", taskService.pageFiltered(ri, bs, st, cf, ct, page, size));
+        r.put("total", taskService.totalFiltered(ri, bs, st, cf, ct));
         r.put("page", page);
         r.put("size", size);
         return r;
+    }
+
+    private static String normalizeFrom(String date) {
+        if (date == null) return null;
+        String d = date.trim();
+        if (d.isEmpty()) return null;
+        // 只给了 yyyy-MM-dd 就补当天 00:00:00；已带 T 的原样透传
+        return d.contains("T") ? d : d + "T00:00:00";
+    }
+
+    private static String normalizeTo(String date) {
+        if (date == null) return null;
+        String d = date.trim();
+        if (d.isEmpty()) return null;
+        // 只给了 yyyy-MM-dd 就补当天 23:59:59.999 让"到 7/25"能包含 7/25 全天
+        return d.contains("T") ? d : d + "T23:59:59.999";
     }
 
     @GetMapping("/{id}")

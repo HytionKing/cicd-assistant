@@ -1,15 +1,44 @@
 (async function () {
   const tbody = document.getElementById('task-tbody');
   const pagerEl = document.getElementById('task-pager');
+  const countHint = document.getElementById('task-count-hint');
+  const form = document.getElementById('filter-form');
+  const selRepo = document.getElementById('f-repo');
+  const inpBranch = document.getElementById('f-branch');
+  const selStatus = document.getElementById('f-status');
+  const inpFrom = document.getElementById('f-from');
+  const inpTo = document.getElementById('f-to');
   const PAGE_SIZES = [10, 20, 50, 100];
   let pageSize = 20;
   let currentPage = 1;
   let total = 0;
   let lastPagerState = '';
+  // 保存当前生效的筛选条件（提交查询时才刷新），轮询按同一份条件重拉
+  let filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
+
+  // 拉一次仓库列表填充多选。项目里没有 select2 之类的库，就用原生 select multiple，
+  // 高度压到一行，用户用 Ctrl / Cmd + 点击多选（写在 title 提示里）
+  try {
+    const repos = await api.get('/api/repos');
+    selRepo.innerHTML = (repos || []).map(r =>
+      `<option value="${r.id}">${escapeHtml(r.name)}</option>`
+    ).join('');
+    selRepo.title = '按住 Ctrl / Cmd 可多选';
+  } catch (e) {
+    selRepo.innerHTML = '<option value="">(仓库列表加载失败)</option>';
+  }
 
   function statusBadge(s) {
     const cls = STATUS_BADGE[s] || 'bg-secondary-lt';
     return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
+  }
+
+  function keepAliveBadge(k) {
+    // 后端 Boolean，null 视作 true（老数据兼容）
+    const on = k === null || k === undefined ? true : !!k;
+    return on
+      ? '<span class="badge bg-green-lt">是</span>'
+      : '<span class="badge bg-secondary-lt">否</span>';
   }
 
   // 计算分页按钮序列：1 ... cur-1 cur cur+1 ... last
@@ -77,9 +106,23 @@
     });
   }
 
+  // 把 filters 拼成 URL query string
+  function buildQuery() {
+    const params = new URLSearchParams();
+    params.set('page', currentPage);
+    params.set('size', pageSize);
+    filters.repoIds.forEach(id => params.append('repoIds', id));
+    filters.branches.forEach(b => params.append('branches', b));
+    if (filters.status) params.set('status', filters.status);
+    if (filters.from) params.set('createdFrom', filters.from);
+    if (filters.to) params.set('createdTo', filters.to);
+    return params.toString();
+  }
+
   async function load() {
-    const d = await api.get(`/api/tasks?page=${currentPage}&size=${pageSize}`);
+    const d = await api.get('/api/tasks?' + buildQuery());
     total = d.total || 0;
+    countHint.textContent = total > 0 ? `共 ${total} 条` : '';
     const items = d.items || [];
     if (items.length === 0 && currentPage > 1) {
       currentPage--;
@@ -91,6 +134,7 @@
         <td><strong>${escapeHtml(t.repoName || '')}</strong></td>
         <td class="text-secondary"><small>${escapeHtml(t.branches || '')}</small></td>
         <td>${statusBadge(t.status)}</td>
+        <td>${keepAliveBadge(t.keepAlive)}</td>
         <td><small class="text-secondary">${escapeHtml(fmtDate(t.createdAt))}</small></td>
         <td><small class="text-secondary">${escapeHtml(fmtDate(t.finishedAt))}</small></td>
         <td class="text-end">
@@ -100,16 +144,46 @@
           </div>
         </td>
       </tr>
-    `).join('') || '<tr><td colspan="7" class="text-center text-secondary py-4">还没有任务，去"代码启动"创建一个吧</td></tr>';
+    `).join('') || '<tr><td colspan="8" class="text-center text-secondary py-4">没有匹配的任务</td></tr>';
     renderPager();
   }
+
+  // 表单提交 = 应用筛选并回到第 1 页
+  form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    filters = {
+      repoIds: Array.from(selRepo.selectedOptions).map(o => o.value).filter(Boolean),
+      branches: inpBranch.value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean),
+      status: selStatus.value,
+      from: inpFrom.value,
+      to: inpTo.value
+    };
+    currentPage = 1;
+    lastPagerState = ''; // 强制 pager 重渲
+    load();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    // 清空表单并回到无筛选状态
+    Array.from(selRepo.options).forEach(o => o.selected = false);
+    inpBranch.value = '';
+    selStatus.value = '';
+    inpFrom.value = '';
+    inpTo.value = '';
+    filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
+    currentPage = 1;
+    lastPagerState = '';
+    load();
+  });
+
+  document.getElementById('btn-refresh').addEventListener('click', load);
 
   tbody.addEventListener('click', async (ev) => {
     const btn = ev.target.closest('button');
     if (!btn) return;
     const ok = await UI.confirm({
       title: '确认删除该任务？',
-      text: '仍在运行的进程会被一并停止，端口将释放。任务的编译/运行日志文件也会保留在服务器上。'
+      text: '仍在运行的进程会被一并停止，端口将释放。该任务的编译/运行日志目录会一并清除。'
     });
     if (!ok) return;
     await api.del('/api/tasks/' + btn.dataset.id);
@@ -125,6 +199,7 @@
       if (newSize !== pageSize) {
         pageSize = newSize;
         currentPage = 1;
+        lastPagerState = '';
         load();
       }
       return;

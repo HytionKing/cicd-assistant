@@ -37,6 +37,48 @@
         SELECT * FROM task WHERE repo_id = #{repoId} AND status IN ('PENDING','RUNNING')
     </select>
 
+    <!--
+      带筛选分页。分支列存的是逗号拼接 CSV（如 "env-1,env-2"），用
+      (',' || branches || ',') LIKE '%,X,%' 精确匹配单个分支（避免 env-1 假匹 env-10）。
+      多个分支之间是 OR（命中任意一个即算），符合"用户在这些分支里挑一个"的语义。
+      时间字段是 ISO_LOCAL_DATE_TIME 字符串（YYYY-MM-DDTHH:MM:SS），字符串比较即时间比较。
+    -->
+    <sql id="filterWhere">
+        <where>
+            <if test="repoIds != null and repoIds.size() > 0">
+                AND repo_id IN
+                <foreach collection="repoIds" item="rid" open="(" separator="," close=")">#{rid}</foreach>
+            </if>
+            <if test="branches != null and branches.size() > 0">
+                AND (
+                <foreach collection="branches" item="b" separator=" OR ">
+                    (',' || branches || ',') LIKE '%,' || #{b} || ',%'
+                </foreach>
+                )
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="createdFrom != null and createdFrom != ''">
+                AND created_at &gt;= #{createdFrom}
+            </if>
+            <if test="createdTo != null and createdTo != ''">
+                AND created_at &lt;= #{createdTo}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findPageFiltered" resultMap="TaskResult">
+        SELECT * FROM task
+        <include refid="filterWhere"/>
+        ORDER BY id DESC LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countFiltered" resultType="int">
+        SELECT COUNT(1) FROM task
+        <include refid="filterWhere"/>
+    </select>
+
     <insert id="insert" parameterType="com.cicdassistant.entity.Task" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO task (repo_id, repo_name, branches, modules, status, error_message, created_at, started_at, finished_at, keep_alive, notify_webhook_id)
         VALUES (#{repoId}, #{repoName}, #{branches}, #{modules}, #{status}, #{errorMessage}, #{createdAt}, #{startedAt}, #{finishedAt}, #{keepAlive}, #{notifyWebhookId})
