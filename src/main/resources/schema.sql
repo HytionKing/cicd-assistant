@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS task_module (
     finished_at TEXT,
     commit_sha TEXT,
     commit_info TEXT,
-    commit_mr_iid TEXT
+    commit_mr_iid TEXT,
+    build_success INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_module_task_id ON task_module(task_id);
