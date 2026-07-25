@@ -3,8 +3,6 @@
   const pagerEl = document.getElementById('task-pager');
   const countHint = document.getElementById('task-count-hint');
   const form = document.getElementById('filter-form');
-  const selRepo = document.getElementById('f-repo');
-  const inpBranch = document.getElementById('f-branch');
   const selStatus = document.getElementById('f-status');
   const inpFrom = document.getElementById('f-from');
   const inpTo = document.getElementById('f-to');
@@ -16,17 +14,36 @@
   // 保存当前生效的筛选条件（提交查询时才刷新），轮询按同一份条件重拉
   let filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
 
-  // 拉一次仓库列表填充多选。项目里没有 select2 之类的库，就用原生 select multiple，
-  // 高度压到一行，用户用 Ctrl / Cmd + 点击多选（写在 title 提示里）
+  // 仓库多选：tom-select 接管，remove_button 插件加叉号可移除单个
+  let allRepos = [];
   try {
-    const repos = await api.get('/api/repos');
-    selRepo.innerHTML = (repos || []).map(r =>
-      `<option value="${r.id}">${escapeHtml(r.name)}</option>`
-    ).join('');
-    selRepo.title = '按住 Ctrl / Cmd 可多选';
-  } catch (e) {
-    selRepo.innerHTML = '<option value="">(仓库列表加载失败)</option>';
-  }
+    allRepos = await api.get('/api/repos') || [];
+  } catch (e) { /* 静默 */ }
+  const repoTs = new TomSelect('#f-repo', {
+    plugins: ['remove_button'],
+    valueField: 'id',
+    labelField: 'name',
+    searchField: 'name',
+    options: allRepos,
+    maxOptions: 200,
+    placeholder: '全部仓库',
+    hideSelected: true
+  });
+
+  // 分支多选：无远端候选，允许用户键入回车自由创建 tag（create: true + delimiter 分割）
+  const branchTs = new TomSelect('#f-branch', {
+    plugins: ['remove_button'],
+    create: true,
+    createOnBlur: true,
+    persist: false,
+    delimiter: ',',
+    placeholder: '留空=全部；输入分支名回车添加'
+  });
+
+  // 日期：flatpickr 中文本地化。ISO 格式（Y-m-d）跟后端 normalizeFrom/To 期望一致
+  flatpickr.localize(flatpickr.l10ns.zh);
+  const fromFp = flatpickr('#f-from', { dateFormat: 'Y-m-d', allowInput: true });
+  const toFp   = flatpickr('#f-to',   { dateFormat: 'Y-m-d', allowInput: true });
 
   function statusBadge(s) {
     const cls = STATUS_BADGE[s] || 'bg-secondary-lt';
@@ -152,8 +169,8 @@
   form.addEventListener('submit', (ev) => {
     ev.preventDefault();
     filters = {
-      repoIds: Array.from(selRepo.selectedOptions).map(o => o.value).filter(Boolean),
-      branches: inpBranch.value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean),
+      repoIds: repoTs.getValue() || [],
+      branches: branchTs.getValue() || [],
       status: selStatus.value,
       from: inpFrom.value,
       to: inpTo.value
@@ -165,11 +182,12 @@
 
   document.getElementById('btn-reset').addEventListener('click', () => {
     // 清空表单并回到无筛选状态
-    Array.from(selRepo.options).forEach(o => o.selected = false);
-    inpBranch.value = '';
+    repoTs.clear();
+    branchTs.clear();
+    branchTs.clearOptions();
     selStatus.value = '';
-    inpFrom.value = '';
-    inpTo.value = '';
+    fromFp.clear();
+    toFp.clear();
     filters = { repoIds: [], branches: [], status: '', from: '', to: '' };
     currentPage = 1;
     lastPagerState = '';
