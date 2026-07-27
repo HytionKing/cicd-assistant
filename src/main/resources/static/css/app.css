@@ -383,6 +383,51 @@
     vertical-align: -3px;
 }
 
+/* tom-select bootstrap5 主题依赖 --bs-* 系列变量，Tabler 用 --tblr-* 前缀，
+ * 没这层映射所有 var() 都为空 → 输入框没边框、dropdown 透明看穿。这里把常用
+ * 的几个补上，保持 tom-select 视觉跟 form-control-sm 完全一致。 */
+:root {
+    --bs-body-bg: var(--tblr-body-bg);
+    --bs-body-color: var(--tblr-body-color);
+    --bs-border-color: var(--tblr-border-color);
+    --bs-border-color-translucent: var(--tblr-border-color-translucent);
+    --bs-border-radius: var(--tblr-border-radius);
+    --bs-border-radius-sm: var(--tblr-border-radius-sm);
+    --bs-border-radius-lg: var(--tblr-border-radius-lg);
+    --bs-border-width: var(--tblr-border-width);
+    --bs-secondary-bg: var(--tblr-bg-surface-secondary);
+    --bs-tertiary-bg: var(--tblr-bg-surface-tertiary);
+    --bs-form-invalid-color: var(--tblr-danger);
+    --bs-form-valid-color: var(--tblr-success);
+    --bs-box-shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.075);
+}
+/* tom-select 修补：
+ * <select> 加 form-select-sm class 后 tom-select 会 propagate 到 wrapper，
+ * 边框/背景就走 Tabler 的 form-select 样式（含上面 --bs-* 变量映射）。
+ * 这里只做两件事：把内层 .ts-control 的重复 padding/background 压掉避免双线，
+ * dropdown 面板给背景兜底防透明。 */
+.ts-wrapper.form-select .ts-control,
+.ts-wrapper.form-control .ts-control {
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: 0;
+}
+.ts-dropdown {
+    background: var(--tblr-body-bg, #ffffff) !important;
+    border: 1px solid var(--tblr-border-color, #e5e7eb) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1055;
+}
+.ts-dropdown .option {
+    background: transparent;
+    color: var(--tblr-body-color);
+}
+.ts-dropdown .option.active {
+    background: var(--tblr-primary-lt, rgba(6, 111, 209, 0.1));
+    color: var(--tblr-primary, #066fd1);
+}
+
 /* 任务列表页的 sticky 页头：滚动列表时标题+筛选条不跟着走。
  * 关键：Tabler 默认给 .page-header 加了 margin-top（page-padding-y），sticky 后会残留
  * 一段空白让人以为没贴顶；上下 padding 自己给足并压掉 margin，视觉才明显。

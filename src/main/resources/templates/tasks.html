@@ -9,7 +9,7 @@
     <link rel="stylesheet" th:href="@{/vendor/tabler-icons/tabler-icons.min.css}"/>
     <link rel="stylesheet" th:href="@{/vendor/tom-select/css/tom-select.bootstrap5.min.css}"/>
     <link rel="stylesheet" th:href="@{/vendor/flatpickr/css/flatpickr.min.css}"/>
-    <link rel="stylesheet" th:href="@{/css/app.css(v=20260725-tasks3)}"/>
+    <link rel="stylesheet" th:href="@{/css/app.css(v=20260725-tasks7)}"/>
 </head>
 <body>
 <div class="page">
@@ -31,11 +31,12 @@
                 <form id="filter-form" class="row g-2 align-items-end">
                     <div class="col-md-3">
                         <label class="form-label mb-1 small">仓库（多选）</label>
-                        <select id="f-repo" multiple placeholder="全部仓库"></select>
+                        <!-- form-select-sm 让 tom-select 复用 Tabler 的边框/背景样式 -->
+                        <select id="f-repo" class="form-select form-select-sm" multiple placeholder="全部仓库"></select>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label mb-1 small">分支（多个，可输入回车创建）</label>
-                        <select id="f-branch" multiple placeholder="留空=全部；输入分支名回车添加"></select>
+                        <select id="f-branch" class="form-select form-select-sm" multiple placeholder="留空=全部；输入分支名回车添加"></select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label mb-1 small">状态</label>
